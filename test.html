@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-G">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NUST Entry Test Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Report Info: Test structure (Table 1 from report) -> Goal: Inform -> Presentation: HTML Table on Welcome Screen -> Interaction: Static display -> Justification: Clear, concise overview of test format.
+        - Report Info: MCQs (Mathematics, Physics, English sections with specified counts) -> Goal: Assess knowledge -> Presentation: Interactive form with radio buttons per question, one question at a time -> Interaction: User selection of one of four options, navigation (next/prev/mark for review), subject switching -> Justification: Standard MCQ test format, allows focused attention on each question.
+        - Report Info: 3-hour timer requirement -> Goal: Simulate exam conditions -> Presentation: Prominent countdown display in header, updated every second -> Interaction: Auto-updates, auto-submits on expiry (or alerts user) -> Justification: Critical for realistic simulation and time management practice.
+        - Report Info: Performance Metrics (Overall Score, Sectional Scores, Accuracy Rate per Subject - Section VI of report) -> Goal: Feedback/Analysis -> Presentation: Numeric scores, Bar Chart (Chart.js) for sectional accuracy comparison, Pie Chart (Chart.js) for overall correct/incorrect/unattempted breakdown, and detailed time spent per subject -> Interaction: Dynamic charts generated based on user's performance after test submission, textual feedback on time management -> Justification: Provides visual and quantitative summary of performance, including time management insights, for effective feedback and weakness identification.
+        - Report Info: Sample Questions from report (Math, Physics, English) -> Goal: Illustrate question types -> Presentation: Integrated into the respective sections of the mock test as actual questions -> Interaction: User attempts these as part of the test -> Justification: Provides realistic question examples within the test flow.
+        - Report Info: Strategic Recommendations (Section VII of report) -> Goal: Guide improvement -> Presentation: Textual list/summary on Analysis screen -> Interaction: Static display -> Justification: Offers actionable advice post-analysis based on report's conclusions.
+        - Report Info: No negative marking policy -> Goal: Inform test strategy -> Presentation: Mentioned in instructions -> Interaction: N/A -> Justification: Important for users to know they should attempt all questions.
+        CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All visualizations via Chart.js (Canvas). Icons are Unicode characters.
+    -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Adjusted for better viewing */
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px; /* Adjusted */
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+                max-height: 400px; /* Adjusted */
+            }
+        }
+        .nav-button-active {
+            background-color: #0284c7; /* sky-600 */
+            color: white;
+        }
+        .nav-button-inactive {
+            background-color: #e5e7eb; /* gray-200 */
+            color: #374151; /* gray-700 */
+        }
+        /* Custom scrollbar for question list */
+        .question-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .question-list::-webkit-scrollbar-track {
+            background: #f1f5f9; /* slate-100 */
+        }
+        .question-list::-webkit-scrollbar-thumb {
+            background: #94a3b8; /* slate-400 */
+            border-radius: 4px;
+        }
+        .question-list::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* slate-500 */
+        }
+        .marked-for-review {
+            background-color: #fef9c3 !important; /* yellow-100 */
+            border: 1px solid #facc15; /* yellow-400 */
+        }
+         .option-label {
+            display: block;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+        }
+        .option-label:hover {
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        .option-label input[type="radio"] {
+            display: none; /* Hide the actual radio button */
+        }
+        .option-label.selected {
+            background-color: #bfdbfe; /* blue-200 */
+            border-color: #3b82f6; /* blue-500 */
+        }
+        .correct-answer {
+            background-color: #d1fae5 !important; /* emerald-100 */
+            border: 1px solid #10b981 !important; /* emerald-500 */
+        }
+        .incorrect-answer {
+            background-color: #fee2e2 !important; /* red-100 */
+            border: 1px solid #ef4444 !important; /* red-500 */
+        }
+        .user-selected-wrong {
+             background-color: #fee2e2 !important; /* red-100 */
+            border: 1px solid #ef4444 !important; /* red-500 */
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex flex-col items-center min-h-screen p-2 sm:p-4">
+
+    <div id="app-container" class="w-full max-w-5xl bg-white shadow-xl rounded-lg">
+        <header class="bg-sky-700 text-white p-4 sm:p-6 rounded-t-lg flex justify-between items-center">
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold">NUST Entry Test Simulation</h1>
+            <div id="timer-container" class="text-lg sm:text-xl font-semibold bg-sky-800 px-3 py-1 rounded-md">
+                <span id="timer">03:00:00</span>
+            </div>
+        </header>
+
+        <main class="p-4 sm:p-6">
+            <div id="welcomeScreen">
+                <h2 class="text-2xl font-semibold mb-4 text-sky-700">Welcome to the NET Simulation!</h2>
+                <p class="mb-3">This mock test is designed to give you a realistic experience of the NUST Entry Test (NET) for Engineering programs. It follows the latest pattern and time constraints.</p>
+                <p class="mb-3"><strong>Test Structure:</strong></p>
+                <ul class="list-disc list-inside mb-4 pl-4 space-y-1">
+                    <li>Total Questions: 200 MCQs</li>
+                    <li>Total Time: 3 Hours (180 Minutes)</li>
+                    <li>No negative marking: Attempt all questions!</li>
+                </ul>
+                <div class="overflow-x-auto mb-6">
+                    <table class="min-w-full divide-y divide-slate-200 border border-slate-300">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Subject</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">MCQs</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Weightage</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Recommended Time</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-200">
+                            <tr>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-slate-900">Mathematics</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">100</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">50%</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">~90 mins</td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-slate-900">Physics</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">60</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">30%</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">~55 mins</td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-slate-900">English</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">40</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">20%</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">~35 mins</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="mb-4 text-sm text-slate-600"><strong>Instructions:</strong> Navigate between sections using the subject buttons. Use "Next" and "Previous" to move between questions. You can "Mark for Review" and revisit questions later. The test will auto-submit when the timer ends.</p>
+                <button id="startTestBtn" class="w-full sm:w-auto bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-150 ease-in-out">
+                    Start Test
+                </button>
+            </div>
+
+            <div id="testScreen" class="hidden">
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="md:w-1/4 bg-slate-50 p-3 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold mb-3 text-sky-700">Sections</h3>
+                        <div class="space-y-2 mb-4">
+                            <button id="navMathBtn" data-subject="mathematics" class="subject-nav-btn w-full text-left p-2 rounded-md nav-button-inactive hover:bg-sky-100">Mathematics (<span id="mathAnsweredCount">0</span>/100)</button>
+                            <button id="navPhysicsBtn" data-subject="physics" class="subject-nav-btn w-full text-left p-2 rounded-md nav-button-inactive hover:bg-sky-100">Physics (<span id="physicsAnsweredCount">0</span>/60)</button>
+                            <button id="navEnglishBtn" data-subject="english" class="subject-nav-btn w-full text-left p-2 rounded-md nav-button-inactive hover:bg-sky-100">English (<span id="englishAnsweredCount">0</span>/40)</button>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-2 text-sky-700">Question Navigator</h3>
+                        <div id="questionNavigator" class="question-list grid grid-cols-5 sm:grid-cols-6 md:grid-cols-4 lg:grid-cols-5 gap-1 max-h-60 overflow-y-auto p-1 border border-slate-200 rounded">
+                            </div>
+                         <p class="text-xs text-slate-500 mt-2">Yellow background indicates marked for review.</p>
+                    </div>
+
+                    <div class="md:w-3/4">
+                        <div id="questionContainer" class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+                            <div class="flex justify-between items-center mb-3">
+                                <h2 id="questionHeader" class="text-xl font-semibold text-sky-700">Mathematics: Question 1 of 100</h2>
+                                <button id="markReviewBtn" class="text-sm bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-semibold py-1 px-3 rounded-md transition duration-150">
+                                    Mark for Review
+                                </button>
+                            </div>
+                            <p id="questionText" class="text-lg mb-5 min-h-[60px]"></p>
+                            <div id="optionsContainer" class="space-y-3">
+                                </div>
+                            <div class="mt-8 flex flex-col sm:flex-row justify-between items-center gap-3">
+                                <button id="prevBtn" class="w-full sm:w-auto bg-slate-500 hover:bg-slate-600 text-white font-semibold py-2 px-5 rounded-lg transition duration-150">Previous</button>
+                                <button id="nextBtn" class="w-full sm:w-auto bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-5 rounded-lg transition duration-150">Next</button>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button id="submitTestBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-150">
+                                Submit Test
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="analysisScreen" class="hidden">
+                <h2 class="text-3xl font-semibold mb-6 text-sky-700 text-center">Test Performance Analysis</h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 class="text-xl font-semibold mb-3 text-center text-emerald-600">Overall Score</h3>
+                        <p id="overallScoreText" class="text-4xl font-bold text-center mb-4">0 / 200</p>
+                        <div class="chart-container mx-auto h-64 sm:h-72">
+                            <canvas id="overallScoreChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 class="text-xl font-semibold mb-3 text-center text-emerald-600">Sectional Performance</h3>
+                         <p class="text-sm text-slate-500 text-center mb-2">(Accuracy %)</p>
+                        <div class="chart-container mx-auto h-64 sm:h-72">
+                            <canvas id="sectionalScoreChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                    <h3 class="text-xl font-semibold mb-4 text-sky-700">Summary</h3>
+                    <div id="scoreSummary" class="space-y-2">
+                        </div>
+                </div>
+
+                <div id="detailedReviewContainer" class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                    <h3 class="text-xl font-semibold mb-4 text-sky-700">Detailed Question Review</h3>
+                    <p class="mb-4 text-sm text-slate-600">Review your answers. Correct answers are highlighted in green, your incorrect selections in red.</p>
+                    <div id="detailedReviewContent" class="space-y-6 max-h-[500px] overflow-y-auto p-2 border border-slate-200 rounded-md">
+                        </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                     <h3 class="text-xl font-semibold mb-4 text-sky-700">Strategic Recommendations (from Report)</h3>
+                     <ul class="list-disc list-inside space-y-2 text-sm text-slate-700">
+                        <li>Prioritize Conceptual Clarity: Focus on deeply understanding core concepts rather than rote memorization.</li>
+                        <li>Master Time Management: Regular practice with a timer is essential. Develop a personalized strategy.</li>
+                        <li>Leverage the No Negative Marking Policy: Attempt all questions.</li>
+                        <li>Utilize Past Papers and Mock Tests Extensively: Focus on the latest test pattern.</li>
+                        <li>Engage in Comprehensive Performance Analysis: Review mistakes thoroughly to identify weak areas.</li>
+                     </ul>
+                </div>
+
+                <div class="mt-8 text-center">
+                    <button id="retakeTestBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-150">
+                        Retake Test
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+<script>
+    // DOM Elements
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    const testScreen = document.getElementById('testScreen');
+    const analysisScreen = document.getElementById('analysisScreen');
+    const startTestBtn = document.getElementById('startTestBtn');
+    const timerDisplay = document.getElementById('timer');
+    const questionHeader = document.getElementById('questionHeader');
+    const questionText = document.getElementById('questionText');
+    const optionsContainer = document.getElementById('optionsContainer');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const markReviewBtn = document.getElementById('markReviewBtn');
+    const submitTestBtn = document.getElementById('submitTestBtn');
+    const subjectNavBtns = document.querySelectorAll('.subject-nav-btn');
+    const questionNavigator = document.getElementById('questionNavigator');
+    const retakeTestBtn = document.getElementById('retakeTestBtn');
+
+    const mathAnsweredCountEl = document.getElementById('mathAnsweredCount');
+    const physicsAnsweredCountEl = document.getElementById('physicsAnsweredCount');
+    const englishAnsweredCountEl = document.getElementById('englishAnsweredCount');
+
+    // Test State
+    let currentSubject = 'mathematics';
+    let currentQuestionIndices = { mathematics: 0, physics: 0, english: 0 };
+    let userSelections = {}; // Store as { 'm1': 'A', 'p5': 'C' }
+    let markedForReview = {}; // Store as { 'm1': true }
+    let timeLeft = 3 * 60 * 60; // 3 hours in seconds
+    let timerInterval;
+    let testActive = false;
+    let questionsData = {};
+    let overallScoreChartInstance, sectionalScoreChartInstance;
+
+    // Time tracking variables
+    let subjectStartTime = {};
+    let subjectTimeSpent = { mathematics: 0, physics: 0, english: 0 };
+    let lastSubjectChangeTime = 0;
+
+    // Recommended time allocations (from the report)
+    const recommendedTime = {
+        mathematics: { min: 80, max: 95, avg: 90 }, // in minutes
+        physics: { min: 45, max: 55, avg: 55 },
+        english: { min: 30, max: 40, avg: 35 }
+    };
+
+    // --- Question Data from mcqs.docx and keys.docx ---
+    // Manually parsed and structured data from the provided files.
+    // The 'id' is constructed as SubjectPrefix + QuestionNumber (e.g., M1, P101, E161)
+    // The 'correctAnswer' is the full text of the correct option.
+
+    const allQuestions = {
+        mathematics: [
+            { id: "M1", text: "What is the limit of (1 - cos x)/x² as x approaches 0?", options: ["0", "1/2", "1", "∞"], correctAnswer: "1/2" },
+            { id: "M2", text: "The derivative of f(x) = 3x³ - 2x + 1 is:", options: ["9x² - 2", "3x² - 2", "9x² + 2", "6x² - 2"], correctAnswer: "9x² - 2" },
+            { id: "M3", text: "Evaluate ∫(3x² + 2) dx from 1 to 2.", options: ["12", "15", "9", "18"], correctAnswer: "15" },
+            { id: "M4", text: "The equation of the line through (1, -2) and (3, 4) is:", options: ["y = 3x - 5", "y = 2x - 4", "y = 3x + 1", "y = x - 3"], correctAnswer: "y = 3x - 5" },
+            { id: "M5", text: "Solve the inequality 4x - 5 ≤ 7.", options: ["x ≤ 3", "x ≥ 3", "x ≤ 2", "x ≥ 2"], correctAnswer: "x ≤ 3" },
+            { id: "M6", text: "The equation 9x² + 16y² = 144 represents:", options: ["Ellipse", "Parabola", "Hyperbola", "Circle"], correctAnswer: "Ellipse" },
+            { id: "M7", text: "The cross product of vectors (1, 2, 0) and (0, 1, 1) is:", options: ["(2, -1, 1)", "(1, -1, 1)", "(2, 1, -1)", "(1, 1, -1)"], correctAnswer: "(2, -1, 1)" },
+            { id: "M8", text: "If cos θ = 4/5, what is tan θ (θ in first quadrant)?", options: ["3/4", "4/3", "5/4", "3/5"], correctAnswer: "3/4" },
+            { id: "M9", text: "The partial fraction of 3/(x² + x) is:", options: ["3/x - 3/(x+1)", "2/x + 1/(x+1)", "1/x - 1/(x+1)", "3/x + 3/(x+1)"], correctAnswer: "3/x - 3/(x+1)" },
+            { id: "M10", text: "The roots of x² + 2x - 3 = 0 are:", options: ["1, -3", "-1, 3", "1, 3", "-1, -3"], correctAnswer: "1, -3" },
+            { id: "M11", text: "If A = {1, 2} and B = {2, 3}, what is A ∩ B?", options: ["{2}", "{1, 2}", "{2, 3}", "{1, 3}"], correctAnswer: "{2}" },
+            { id: "M12", text: "The coefficient of x² in the expansion of (1 + 2x)⁴ is:", options: ["24", "16", "32", "8"], correctAnswer: "24" },
+            { id: "M13", text: "The sum of the series 1 + 3 + 5 + ... + 19 is:", options: ["100", "90", "110", "80"], correctAnswer: "100" },
+            { id: "M14", text: "The probability of getting heads twice in two coin tosses is:", options: ["1/4", "1/2", "1/3", "3/4"], correctAnswer: "1/4" },
+            { id: "M15", text: "The number of ways to arrange 4 distinct books on a shelf is:", options: ["24", "12", "6", "4"], correctAnswer: "24" },
+            { id: "M16", text: "If f(x) = x² + 1, what is f(-2)?", options: ["5", "3", "4", "2"], correctAnswer: "5" },
+            { id: "M17", text: "The derivative of sin(2x) is:", options: ["2 cos(2x)", "cos(2x)", "-2 sin(2x)", "sin(2x)"], correctAnswer: "2 cos(2x)" },
+            { id: "M18", text: "∫(1/x) dx is:", options: ["ln|x| + C", "1/x + C", "x + C", "e^x + C"], correctAnswer: "ln|x| + C" },
+            { id: "M19", text: "The midpoint of the segment joining (2, 3) and (4, 7) is:", options: ["(3, 5)", "(2, 5)", "(3, 4)", "(4, 5)"], correctAnswer: "(3, 5)" },
+            { id: "M20", text: "Solve 2x + 3 > 9.", options: ["x > 3", "x < 3", "x > 6", "x < 6"], correctAnswer: "x > 3" },
+            { id: "M21", text: "The vertex of the parabola y = x² - 4x + 3 is:", options: ["(2, -1)", "(2, 1)", "(1, -2)", "(1, 2)"], correctAnswer: "(2, -1)" },
+            { id: "M22", text: "The unit vector in the direction of (3, -4) is:", options: ["(3/5, -4/5)", "(3/4, -4/3)", "(4/5, -3/5)", "(3/5, 4/5)"], correctAnswer: "(3/5, -4/5)" },
+            { id: "M23", text: "If sin θ = 3/5 and θ is acute, what is cos θ?", options: ["4/5", "3/4", "5/4", "4/3"], correctAnswer: "4/5" },
+            { id: "M24", text: "The partial fraction of 1/(x² - 4) is:", options: ["1/(2(x-2)) - 1/(2(x+2))", "1/(x-2) + 1/(x+2)", "1/(x-2) - 1/(x+2)", "1/(2(x+2)) - 1/(2(x-2))"], correctAnswer: "1/(2(x-2)) - 1/(2(x+2))" },
+            { id: "M25", text: "The sum of the roots of 2x² - 8x + 6 = 0 is:", options: ["4", "2", "3", "6"], correctAnswer: "4" },
+            { id: "M26", text: "The number of elements in the power set of {a, b, c} is:", options: ["8", "4", "6", "3"], correctAnswer: "8" },
+            { id: "M27", text: "The term independent of x in (x + 1/x)⁴ is:", options: ["6", "4", "8", "2"], correctAnswer: "6" },
+            { id: "M28", text: "The 6th term of the sequence 2, 5, 8, ... is:", options: ["17", "20", "14", "11"], correctAnswer: "17" },
+            { id: "M29", text: "The probability of drawing an ace from a standard deck is:", options: ["1/13", "1/4", "1/52", "1/26"], correctAnswer: "1/13" },
+            { id: "M30", text: "The number of ways to choose 3 students from 5 is:", options: ["10", "15", "20", "5"], correctAnswer: "10" },
+            { id: "M31", text: "If f(x) = ln(x), what is f'(x)?", options: ["1/x", "x", "ln(x)", "e^x"], correctAnswer: "1/x" },
+            { id: "M32", text: "The second derivative of x⁴ is:", options: ["12x²", "4x³", "6x", "24x"], correctAnswer: "12x²" },
+            { id: "M33", text: "Evaluate ∫sin(x) dx from 0 to π.", options: ["0", "1", "2", "-1"], correctAnswer: "0" },
+            { id: "M34", text: "The slope of the line perpendicular to y = 2x + 1 is:", options: ["-1/2", "2", "1/2", "-2"], correctAnswer: "-1/2" },
+            { id: "M35", text: "Solve 5 - 3x ≥ 2.", options: ["x ≤ 1", "x ≥ 1", "x ≤ 3", "x ≥ 3"], correctAnswer: "x ≤ 1" },
+            { id: "M36", text: "The foci of the hyperbola x²/9 - y²/16 = 1 are:", options: ["(±5, 0)", "(0, ±5)", "(±4, 0)", "(0, ±4)"], correctAnswer: "(±5, 0)" },
+            { id: "M37", text: "The angle between vectors (1, 0) and (0, 1) is:", options: ["90°", "0°", "45°", "180°"], correctAnswer: "90°" },
+            { id: "M38", text: "If tan θ = 1, what is sin θ (θ in first quadrant)?", options: ["1/√2", "1/2", "√2", "1"], correctAnswer: "1/√2" },
+            { id: "M39", text: "The partial fraction of 2x/(x² - 1) is:", options: ["1/(x-1) + 1/(x+1)", "2/(x-1) - 2/(x+1)", "1/(x-1) - 1/(x+1)", "2/(x+1) + 2/(x-1)"], correctAnswer: "1/(x-1) + 1/(x+1)" },
+            { id: "M40", text: "The product of the roots of x² - x - 6 = 0 is:", options: ["-6", "6", "-1", "1"], correctAnswer: "-6" },
+            { id: "M41", text: "If f: R → R is defined by f(x) = 2x, is it one-to-one?", options: ["Yes", "No", "Only for x > 0", "Only for x < 0"], correctAnswer: "Yes" },
+            { id: "M42", text: "The coefficient of x³ in (1 - x)⁵ is:", options: ["-10", "10", "-5", "5"], correctAnswer: "-10" },
+            { id: "M43", text: "The sum of an infinite geometric series 1 + 1/2 + 1/4 + ... is:", options: ["2", "1", "3", "∞"], correctAnswer: "2" },
+            { id: "M44", text: "The probability of rolling an even number on a die is:", options: ["1/2", "1/3", "1/6", "2/3"], correctAnswer: "1/2" },
+            { id: "M45", text: "The number of ways to seat 3 people in 3 chairs is:", options: ["6", "3", "9", "1"], correctAnswer: "6" },
+            { id: "M46", text: "The limit of (e^x - 1)/x as x approaches 0 is:", options: ["1", "0", "e", "∞"], correctAnswer: "1" },
+            { id: "M47", text: "The derivative of e^(2x) is:", options: ["2e^(2x)", "e^(2x)", "2e^x", "e^x"], correctAnswer: "2e^(2x)" },
+            { id: "M48", text: "∫x² dx from 0 to 1 is:", options: ["1/3", "1/2", "1", "2/3"], correctAnswer: "1/3" },
+            { id: "M49", text: "The distance from (0, 0) to the line x + y = 2 is:", options: ["√2", "2", "1", "√2/2"], correctAnswer: "√2" },
+            { id: "M50", text: "Solve x + 2 < 5.", options: ["x < 3", "x > 3", "x < 5", "x > 5"], correctAnswer: "x < 3" },
+            { id: "M51", text: "The directrix of the parabola x² = 4y is:", options: ["y = -1", "y = 1", "x = 1", "x = -1"], correctAnswer: "y = -1" },
+            { id: "M52", text: "The scalar projection of (2, 3) onto (1, 1) is:", options: ["5/√2", "5", "√2", "3/√2"], correctAnswer: "5/√2" },
+            { id: "M53", text: "If cot θ = 12/5, what is sin θ (θ in first quadrant)?", options: ["5/13", "12/13", "5/12", "13/5"], correctAnswer: "5/13" },
+            { id: "M54", text: "The partial fraction of 4/(x(x+2)) is:", options: ["2/x - 2/(x+2)", "1/x + 1/(x+2)", "2/x + 2/(x+2)", "1/x - 1/(x+2)"], correctAnswer: "2/x - 2/(x+2)" },
+            { id: "M55", text: "The quadratic equation with roots 2 and -3 is:", options: ["x² + x - 6 = 0", "x² - x - 6 = 0", "x² + x + 6 = 0", "x² - x + 6 = 0"], correctAnswer: "x² + x - 6 = 0" },
+            { id: "M56", text: "If A = {x | x is even}, B = {2, 4}, is B  ⊂  A?", options: ["Yes", "No", "Only for x > 0", "Only for x < 0"], correctAnswer: "Yes" },
+            { id: "M57", text: "The coefficient of x⁴ in (2 + x)⁵ is:", options: ["80", "40", "20", "10"], correctAnswer: "80" },
+            { id: "M58", text: "The 10th term of the sequence 1, 4, 7, ... is:", options: ["28", "25", "31", "34"], correctAnswer: "28" },
+            { id: "M59", text: "The probability of at least one head in two coin tosses is:", options: ["3/4", "1/4", "1/2", "1"], correctAnswer: "3/4" },
+            { id: "M60", text: "The number of ways to form a committee of 2 from 4 people is:", options: ["6", "4", "8", "2"], correctAnswer: "6" },
+            { id: "M61", text: "The limit of (x² - 1)/(x - 1) as x approaches 1 is:", options: ["2", "1", "0", "∞"], correctAnswer: "2" },
+            { id: "M62", text: "The derivative of 1/x² is:", options: ["-2/x³", "2/x³", "-1/x³", "1/x³"], correctAnswer: "-2/x³" },
+            { id: "M63", text: "∫cos(x) dx from 0 to π/2 is:", options: ["1", "0", "-1", "2"], correctAnswer: "1" },
+            { id: "M64", text: "The angle between the lines y = x and y = -x is:", options: ["90°", "45°", "180°", "0°"], correctAnswer: "90°" },
+            { id: "M65", text: "Solve 2x - 7 ≤ 3.", options: ["x ≤ 5", "x ≥ 5", "x ≤ 3", "x ≥ 3"], correctAnswer: "x ≤ 5" },
+            { id: "M66", text: "The eccentricity of the ellipse x²/25 + y²/16 = 1 is:", options: ["3/5", "4/5", "3/4", "5/4"], correctAnswer: "3/5" },
+            { id: "M67", text: "The vector (2, -1) + (3, 4) is:", options: ["(5, 3)", "(5, -3)", "(1, 3)", "(1, -3)"], correctAnswer: "(5, 3)" },
+            { id: "M68", text: "If sec θ = 13/12, what is cos θ (θ in first quadrant)?", options: ["12/13", "13/12", "5/13", "12/5"], correctAnswer: "12/13" },
+            { id: "M69", text: "The partial fraction of x/(x² + 2x + 1) is:", options: ["1/(x+1) - 1/(x+1)²", "1/(x+1) + 1/(x+1)²", "2/(x+1) - 1/(x+1)²", "1/(x+1) - 2/(x+1)²"], correctAnswer: "1/(x+1) - 1/(x+1)²" },
+            { id: "M70", text: "The quadratic formula for ax² + bx + c = 0 is:", options: ["x = [-b ± √(b² - 4ac)]/(2a)", "x = [-b ± √(b² + 4ac)]/(2a)", "x = [b ± √(b² - 4ac)]/(2a)", "x = [-b ± √(b² - 4ac)]/a"], correctAnswer: "x = [-b ± √(b² - 4ac)]/(2a)" },
+            { id: "M71", text: "If f(x) = x + 1, what is the inverse function?", options: ["f⁻¹(x) = x - 1", "f⁻¹(x) = x + 1", "f⁻¹(x) = 1/x", "f⁻¹(x) = -x"], correctAnswer: "f⁻¹(x) = x - 1" },
+            { id: "M72", text: "The coefficient of x in (1 + x)³ is:", options: ["3", "1", "6", "2"], correctAnswer: "3" },
+            { id: "M73", text: "The common ratio of the geometric sequence 2, 6, 18, ... is:", options: ["3", "2", "6", "1"], correctAnswer: "3" },
+            { id: "M74", text: "The probability of rolling a number less than 3 on a die is:", options: ["1/3", "1/2", "1/6", "2/3"], correctAnswer: "1/3" },
+            { id: "M75", text: "The number of permutations of {1, 2, 3} is:", options: ["6", "3", "9", "1"], correctAnswer: "6" },
+            { id: "M76", text: "The limit of (x³ - 8)/(x - 2) as x approaches 2 is:", options: ["12", "8", "4", "16"], correctAnswer: "12" },
+            { id: "M77", text: "The derivative of x sin(x) is:", options: ["sin(x) + x cos(x)", "cos(x) + x sin(x)", "sin(x) - x cos(x)", "cos(x) - x sin(x)"], correctAnswer: "sin(x) + x cos(x)" },
+            { id: "M78", text: "∫(2x + 3) dx from 0 to 1 is:", options: ["4", "3", "2", "5"], correctAnswer: "4" },
+            { id: "M79", text: "The equation of the circle with center (0, 0) and radius 5 is:", options: ["x² + y² = 25", "x² + y² = 5", "x² + y² = 10", "x² + y² = 15"], correctAnswer: "x² + y² = 25" },
+            { id: "M80", text: "Solve 3x + 4 ≥ 10.", options: ["x ≥ 2", "x ≤ 2", "x ≥ 4", "x ≤ 4"], correctAnswer: "x ≥ 2" },
+            { id: "M81", text: "The latus rectum of the parabola y² = 16x is:", options: ["16", "8", "4", "12"], correctAnswer: "16" },
+            { id: "M82", text: "The direction cosines of (1, 1, 1) are:", options: ["(1/√3, 1/√3, 1/√3)", "(1, 1, 1)", "(1/3, 1/3, 1/3)", "(√3, √3, √3)"], correctAnswer: "(1/√3, 1/√3, 1/√3)" },
+            { id: "M83", text: "If sin θ + cos θ = 1, what is θ (0 ≤ θ < 2π)?", options: ["0", "π/2", "π/4", "π"], correctAnswer: "0" },
+            { id: "M84", text: "The partial fraction of 1/(x³ - x) is:", options: ["-1/x + 1/(2(x-1)) + 1/(2(x+1))", "1/x - 1/(x-1) - 1/(x+1)", " -1/x + 1/(x-1) - 1/(x+1)", "1/x + 1/(x-1) + 1/(x+1)"], correctAnswer: "-1/x + 1/(2(x-1)) + 1/(2(x+1))" },
+            { id: "M85", text: "The discriminant of x² + 6x + 9 = 0 is:", options: ["0", "36", "-36", "18"], correctAnswer: "0" },
+            { id: "M86", text: "If A =  ∅ , what is A  ∪  A?", options: [" ∅ ", "{ ∅ }", "A", "{A}"], correctAnswer: " ∅ " },
+            { id: "M87", text: "The coefficient of x³ in (x - 2)⁴ is:", options: ["-32", "32", "-16", "16"], correctAnswer: "-32" },
+            { id: "M88", text: "The sum of the first 5 terms of 3, 6, 12, ... is:", options: ["93", "96", "90", "99"], correctAnswer: "93" },
+            { id: "M89", text: "The probability of drawing a heart from a standard deck is:", options: ["1/4", "1/2", "1/13", "1/52"], correctAnswer: "1/4" },
+            { id: "M90", text: "The number of ways to choose 2 items from 5 without order is:", options: ["10", "20", "5", "15"], correctAnswer: "10" },
+            { id: "M91", text: "If f(x) = 2^x, what is f'(x)?", options: ["2^x ln 2", "2^x", "x 2^(x-1)", "ln 2"], correctAnswer: "2^x ln 2" },
+            { id: "M92", text: "The derivative of tan(x) is:", options: ["sec²(x)", "csc²(x)", "cot(x)", "tan(x)"], correctAnswer: "sec²(x)" },
+            { id: "M93", text: "∫e^x dx from 0 to 1 is:", options: ["e - 1", "e", "1", "e + 1"], correctAnswer: "e - 1" },
+            { id: "M94", text: "The equation of the line parallel to y = 3x - 1 through (0, 2) is:", options: ["y = 3x + 2", "y = 3x - 2", "y = 2x + 2", "y = x + 2"], correctAnswer: "y = 3x + 2" },
+            { id: "M95", text: "Solve 7 - 2x > 1.", options: ["x < 3", "x > 3", "x < 1", "x > 1"], correctAnswer: "x < 3" },
+            { id: "M96", text: "The center of the ellipse 4x² + 9y² = 36 is:", options: ["(0, 0)", "(2, 3)", "(3, 2)", "(4, 9)"], correctAnswer: "(0, 0)" },
+            { id: "M97", text: "The vector perpendicular to (1, 2) is:", options: ["(-2, 1)", "(2, -1)", "(1, -2)", "(-1, -2)"], correctAnswer: "(-2, 1)" },
+            { id: "M98", text: "If cosec θ = 2, what is sin θ (θ in first quadrant)?", options: ["1/2", "2", "1", "√2"], correctAnswer: "1/2" },
+            { id: "M99", text: "The partial fraction of 5/(x² - x - 2) is:", options: ["1/(x-2) - 1/(x+1)", "2/(x-2) + 3/(x+1)", "3/(x-2) - 2/(x+1)", "1/(x-2) + 1/(x+1)"], correctAnswer: "1/(x-2) - 1/(x+1)" },
+            { id: "M100", text: "The nature of roots of x² - 4x + 4 = 0 is:", options: ["Real and equal", "Real and distinct", "Complex", "Imaginary"], correctAnswer: "Real and equal" }
+        ],
+        physics: [
+            { id: "P101", text: "The dimension of velocity is:", options: ["[LT⁻¹]", "[L²T⁻¹]", "[LT⁻²]", "[L²T⁻²]"], correctAnswer: "[LT⁻¹]" },
+            { id: "P102", text: "The resultant of two vectors (3, 0) and (0, 4) is:", options: ["5", "7", "3", "4"], correctAnswer: "5" },
+            { id: "P103", text: "A body moving with constant acceleration covers 20 m in 2 s. Its acceleration is:", options: ["10 m/s²", "5 m/s²", "20 m/s²", "2 m/s²"], correctAnswer: "10 m/s²" },
+            { id: "P104", text: "The work done by a force of 10 N over 5 m is:", options: ["50 J", "25 J", "10 J", "5 J"], correctAnswer: "50 J" },
+            { id: "P105", text: "The centripetal acceleration is given by:", options: ["v²/r", "v/r", "r/v", "v²r"], correctAnswer: "v²/r" },
+            { id: "P106", text: "In fluid flow, streamline motion occurs when:", options: ["Flow is laminar", "Flow is turbulent", "Velocity is zero", "Pressure is zero"], correctAnswer: "Flow is laminar" },
+            { id: "P107", text: "The frequency of a simple harmonic oscillator is proportional to:", options: ["√(k/m)", "√(m/k)", "k/m", "m/k"], correctAnswer: "√(k/m)" },
+            { id: "P108", text: "The wavelength of a wave with speed 340 m/s and frequency 170 Hz is:", options: ["2 m", "1 m", "4 m", "0.5 m"], correctAnswer: "2 m" },
+            { id: "P109", text: "In interference, destructive interference occurs when path difference is:", options: ["(n + 1/2)λ", "nλ", "λ/2", "λ"], correctAnswer: "(n + 1/2)λ" },
+            { id: "P110", text: "A convex lens has a focal length of 20 cm. Its power is:", options: ["5 D", "2 D", "10 D", "0.5 D"], correctAnswer: "5 D" },
+            { id: "P111", text: "The second law of thermodynamics introduces:", options: ["Entropy", "Enthalpy", "Internal energy", "Work"], correctAnswer: "Entropy" },
+            { id: "P112", text: "The electric field at a distance r from a charge q is:", options: ["kq/r²", "kq/r", "q/r²", "q/r"], correctAnswer: "kq/r²" },
+            { id: "P113", text: "The resistance of a wire depends on:", options: ["Length and area", "Voltage", "Current", "Power"], correctAnswer: "Length and area" },
+            { id: "P114", text: "The magnetic field due to a current-carrying wire is proportional to:", options: ["I/r", "I r", "I/r²", "I r²"], correctAnswer: "I/r" },
+            { id: "P115", text: "Lenz’s law is associated with:", options: ["Electromagnetic induction", "Electrostatics", "Magnetism", "Current flow"], correctAnswer: "Electromagnetic induction" },
+            { id: "P116", text: "The peak voltage of an AC source with RMS voltage 220 V is:", options: ["311 V", "220 V", "440 V", "110 V"], correctAnswer: "311 V" },
+            { id: "P117", text: "In solids, the energy bands are:", options: ["Discrete", "Continuous", "Overlapping", "Infinite"], correctAnswer: "Discrete" },
+            { id: "P118", text: "A transistor is used as:", options: ["Amplifier", "Resistor", "Capacitor", "Inductor"], correctAnswer: "Amplifier" },
+            { id: "P119", text: "The de Broglie wavelength is given by:", options: ["h/p", "h/p²", "p/h", "hp"], correctAnswer: "h/p" },
+            { id: "P120", text: "The spectral lines of hydrogen are explained by:", options: ["Bohr’s model", "Rutherford’s model", "Thomson’s model", "Planck’s model"], correctAnswer: "Bohr’s model" },
+            { id: "P121", text: "The SI unit of power is:", options: ["Watt", "Joule", "Newton", "Pascal"], correctAnswer: "Watt" },
+            { id: "P122", text: "The scalar product of two perpendicular vectors is:", options: ["Zero", "One", "Negative", "Positive"], correctAnswer: "Zero" },
+            { id: "P123", text: "The range of a projectile depends on:", options: ["Angle of projection", "Mass of projectile", "Air resistance", "Height of launch"], correctAnswer: "Angle of projection" },
+            { id: "P124", text: "The potential energy of a spring is given by:", options: ["(1/2)kx²", "kx", "(1/2)kx", "kx²"], correctAnswer: "(1/2)kx²" },
+            { id: "P125", text: "The angular velocity in circular motion is:", options: ["v/r", "v²/r", "r/v", "v r"], correctAnswer: "v/r" },
+            { id: "P126", text: "Pascal’s principle applies to:", options: ["Fluids at rest", "Fluids in motion", "Gases only", "Liquids only"], correctAnswer: "Fluids at rest" },
+            { id: "P127", text: "The restoring force in SHM is proportional to:", options: ["Displacement", "Velocity", "Acceleration", "Time"], correctAnswer: "Displacement" },
+            { id: "P128", text: "The speed of sound in air depends on:", options: ["Temperature", "Frequency", "Wavelength", "Amplitude"], correctAnswer: "Temperature" },
+            { id: "P129", text: "The condition for constructive interference is:", options: ["Path difference = nλ", "Path difference = (n + 1/2)λ", "Path difference = λ/2", "Path difference = λ/4"], correctAnswer: "Path difference = nλ" },
+            { id: "P130", text: "The magnification of a lens is:", options: ["v/u", "u/v", "f/u", "u/f"], correctAnswer: "v/u" },
+            { id: "P131", text: "Heat transfer by convection occurs in:", options: ["Fluids", "Solids", "Vacuum", "Metals"], correctAnswer: "Fluids" },
+            { id: "P132", text: "The potential difference between two points is measured in:", options: ["Volts", "Amperes", "Ohms", "Coulombs"], correctAnswer: "Volts" },
+            { id: "P133", text: "Kirchhoff’s first law is based on conservation of:", options: ["Charge", "Energy", "Momentum", "Mass"], correctAnswer: "Charge" },
+            { id: "P134", text: "The force on a charged particle in a magnetic field is:", options: ["qvB sin θ", "qvB", "qB", "vB"], correctAnswer: "qvB sin θ" },
+            { id: "P135", text: "The emf induced in a coil depends on:", options: ["Rate of change of flux", "Resistance", "Current", "Voltage"], correctAnswer: "Rate of change of flux" },
+            { id: "P136", text: "The impedance in an AC circuit includes:", options: ["Resistance and reactance", "Resistance only", "Reactance only", "Voltage"], correctAnswer: "Resistance and reactance" },
+            { id: "P137", text: "Conductors have:", options: ["Free electrons", "Bound electrons", "No electrons", "Positive charges"], correctAnswer: "Free electrons" },
+            { id: "P138", text: "A diode allows current to flow:", options: ["In one direction", "In both directions", "When reversed", "Only at high voltage"], correctAnswer: "In one direction" },
+            { id: "P139", text: "The uncertainty principle was proposed by:", options: ["Heisenberg", "Einstein", "Bohr", "Planck"], correctAnswer: "Heisenberg" },
+            { id: "P140", text: "The half-life of a radioactive substance is:", options: ["Time for half the nuclei to decay", "Time for all nuclei to decay", "Time for one nucleus to decay", "Time for stability"], correctAnswer: "Time for half the nuclei to decay" },
+            { id: "P141", text: "The prefix ‘kilo’ means:", options: ["10³", "10⁶", "10⁻³", "10⁻⁶"], correctAnswer: "10³" },
+            { id: "P142", text: "The vector (2, 3) - (1, 1) is:", options: ["(1, 2)", "(3, 4)", "(1, -2)", "(-1, -2)"], correctAnswer: "(1, 2)" },
+            { id: "P143", text: "The time period of a satellite in circular orbit depends on:", options: ["Radius of orbit", "Mass of satellite", "Speed of satellite", "Altitude only"], correctAnswer: "Radius of orbit" },
+            { id: "P144", text: "The kinetic energy of a 2 kg object moving at 3 m/s is:", options: ["9 J", "18 J", "6 J", "12 J"], correctAnswer: "9 J" },
+            { id: "P145", text: "The tension in a string in circular motion provides:", options: ["Centripetal force", "Tangential force", "Gravitational force", "Frictional force"], correctAnswer: "Centripetal force" },
+            { id: "P146", text: "The continuity equation in fluid dynamics is based on:", options: ["Conservation of mass", "Conservation of energy", "Conservation of momentum", "Conservation of charge"], correctAnswer: "Conservation of mass" },
+            { id: "P147", text: "The amplitude of an oscillator decreases due to:", options: ["Damping", "Resonance", "Frequency", "Phase"], correctAnswer: "Damping" },
+            { id: "P148", text: "The Doppler effect is observed in:", options: ["Waves", "Particles", "Static fields", "Stationary objects"], correctAnswer: "Waves" },
+            { id: "P149", text: "The fringe width in Young’s double-slit experiment is:", options: ["λD/d", "λd/D", "Dd/λ", "λ/D"], correctAnswer: "λD/d" },
+            { id: "P150", text: "A concave mirror forms a real image when the object is:", options: ["Beyond C", "At F", "At C", "Between F and pole"], correctAnswer: "Beyond C" },
+            { id: "P151", text: "The specific heat capacity is measured in:", options: ["J/kg·K", "J/kg", "J/K", "kg·K/J"], correctAnswer: "J/kg·K" },
+            { id: "P152", text: "The capacitance of a capacitor depends on:", options: ["Area and distance", "Voltage", "Charge", "Current"], correctAnswer: "Area and distance" },
+            { id: "P153", text: "The power in an electric circuit is:", options: ["VI", "V/I", "I/V", "V²I"], correctAnswer: "VI" },
+            { id: "P154", text: "The magnetic flux is measured in:", options: ["Weber", "Tesla", "Henry", "Gauss"], correctAnswer: "Weber" },
+            { id: "P155", text: "The transformer works on the principle of:", options: ["Mutual induction", "Self-induction", "Ohm’s law", "Faraday’s law"], correctAnswer: "Mutual induction" },
+            { id: "P156", text: "The reactance of a capacitor is:", options: ["1/(ωC)", "ωC", "1/(ωL)", "ωL"], correctAnswer: "1/(ωC)" },
+            { id: "P157", text: "Insulators have:", options: ["Large band gap", "Small band gap", "No band gap", "Overlapping bands"], correctAnswer: "Large band gap" },
+            { id: "P158", text: "The gain of an amplifier is:", options: ["Output/Input", "Input/Output", "Output × Input", "Output - Input"], correctAnswer: "Output/Input" },
+            { id: "P159", text: "The Compton effect shows:", options: ["Particle nature of light", "Wave nature of light", "Dual nature of light", "Refraction of light"], correctAnswer: "Particle nature of light" },
+            { id: "P160", text: "Nuclear fission involves:", options: ["Splitting of nucleus", "Combining of nuclei", "Emission of electrons", "Absorption of neutrons"], correctAnswer: "Splitting of nucleus" }
+        ],
+        english: [
+            { id: "E161", text: "Passage: The forest was alive with the sounds of birds and rustling leaves. What is the main idea?", options: ["The forest is noisy", "Birds are singing", "Leaves are falling", "The forest is empty"], correctAnswer: "The forest is noisy" },
+            { id: "E162", text: "Big is to small as long is to:", options: ["Short", "Tall", "Wide", "Deep"], correctAnswer: "Short" },
+            { id: "E163", text: "A synonym for “brave” is:", options: ["Courageous", "Afraid", "Weak", "Tired"], correctAnswer: "Courageous" },
+            { id: "E164", text: "An antonym for “happy” is:", options: ["Sad", "Joyful", "Excited", "Content"], correctAnswer: "Sad" },
+            { id: "E165", text: "Correct the sentence: They is going to the park.", options: ["They are going to the park.", "They was going to the park.", "They going to the park.", "They goes to the park."], correctAnswer: "They are going to the park." },
+            { id: "E166", text: "Correct the spelling: Occured", options: ["Occurred", "Occured", "Ocurred", "Occurred"], correctAnswer: "Occurred" },
+            { id: "E167", text: "Passage: Reading improves vocabulary and critical thinking. What is the main idea?", options: ["Reading is beneficial", "Vocabulary is important", "Thinking is difficult", "Reading is boring"], correctAnswer: "Reading is beneficial" },
+            { id: "E168", text: "Fast is to slow as bright is to:", options: ["Dim", "Light", "Shiny", "Glow"], correctAnswer: "Dim" },
+            { id: "E169", text: "A synonym for “difficult” is:", options: ["Hard", "Easy", "Simple", "Soft"], correctAnswer: "Hard" },
+            { id: "E170", text: "An antonym for “strong” is:", options: ["Weak", "Powerful", "Sturdy", "Firm"], correctAnswer: "Weak" },
+            { id: "E171", text: "Passage: The river flows gently through the village, providing water for crops. What is the main idea?", options: ["The river supports agriculture", "The village is small", "The river is fast", "Crops are expensive"], correctAnswer: "The river supports agriculture" },
+            { id: "E172", text: "Teacher is to student as chef is to:", options: ["Cook", "Kitchen", "Food", "Recipe"], correctAnswer: "Cook" },
+            { id: "E173", text: "A synonym for “calm” is:", options: ["Peaceful", "Angry", "Noisy", "Excited"], correctAnswer: "Peaceful" },
+            { id: "E174", text: "An antonym for “old” is:", options: ["Young", "Ancient", "Aged", "Mature"], correctAnswer: "Young" },
+            { id: "E175", text: "Correct the sentence: He don’t like to swim.", options: ["He doesn’t like to swim.", "He don’t likes to swim.", "He not like to swim.", "He doesn’t likes to swim."], correctAnswer: "He doesn’t like to swim." },
+            { id: "E176", text: "Correct the spelling: Seperate", options: ["Separate", "Seperate", "Sepparate", "Seperete"], correctAnswer: "Separate" },
+            { id: "E177", text: "Passage: Stars twinkle in the night sky, creating a beautiful scene. What is the main idea?", options: ["The night sky is beautiful", "Stars are bright", "The sky is dark", "Stars are far away"], correctAnswer: "The night sky is beautiful" },
+            { id: "E178", text: "Pen is to write as brush is to:", options: ["Paint", "Draw", "Clean", "Sweep"], correctAnswer: "Paint" },
+            { id: "E179", text: "A synonym for “big” is:", options: ["Large", "Small", "Tiny", "Little"], correctAnswer: "Large" },
+            { id: "E180", text: "An antonym for “hot” is:", options: ["Cold", "Warm", "Boiling", "Heated"], correctAnswer: "Cold" },
+            { id: "E181", text: "Correct the sentence: She go to school every day.", options: ["She goes to school every day.", "She going to school every day.", "She go to school everyday.", "She goes to school everyday."], correctAnswer: "She goes to school every day." },
+            { id: "E182", text: "Correct the spelling: Acomodation", options: ["Accommodation", "Acommodation", "Accomodation", "Accommodate"], correctAnswer: "Accommodation" },
+            { id: "E183", text: "Passage: Exercise keeps the body healthy and strong. What is the main idea?", options: ["Exercise is good for health", "The body is strong", "Health is important", "Exercise is tiring"], correctAnswer: "Exercise is good for health" },
+            { id: "E184", text: "Lock is to key as door is to:", options: ["Handle", "Window", "Wall", "Floor"], correctAnswer: "Handle" },
+            { id: "E185", text: "A synonym for “fast” is:", options: ["Quick", "Slow", "Steady", "Calm"], correctAnswer: "Quick" },
+            { id: "E186", text: "An antonym for “near” is:", options: ["Far", "Close", "Next", "Beside"], correctAnswer: "Far" },
+            { id: "E187", text: "Correct the sentence: I has two cats.", options: ["I have two cats.", "I has two cat.", "I have two cat.", "I having two cats."], correctAnswer: "I have two cats." },
+            { id: "E188", text: "Correct the spelling: Definately", options: ["Definitely", "Definitly", "Definately", "Definitelly"], correctAnswer: "Definitely" },
+            { id: "E189", text: "Passage: Music can uplift moods and inspire creativity. What is the main idea?", options: ["Music is inspiring", "Moods are changeable", "Creativity is important", "Music is loud"], correctAnswer: "Music is inspiring" },
+            { id: "E190", text: "Foot is to shoe as hand is to:", options: ["Glove", "Ring", "Bracelet", "Watch"], correctAnswer: "Glove" },
+            { id: "E191", text: "A synonym for “glad” is:", options: ["Happy", "Sad", "Angry", "Tired"], correctAnswer: "Happy" },
+            { id: "E192", text: "An antonym for “light” is:", options: ["Dark", "Bright", "Shiny", "Clear"], correctAnswer: "Dark" },
+            { id: "E193", text: "Correct the sentence: We was playing in the park.", options: ["We were playing in the park.", "We was played in the park.", "We were play in the park.", "We was playing at the park."], correctAnswer: "We were playing in the park." },
+            { id: "E194", text: "Correct the spelling: Tommorrow", options: ["Tomorrow", "Tommorow", "Tommorrow", "Tomorow"], correctAnswer: "Tomorrow" },
+            { id: "E195", text: "Passage: Trees provide shade and oxygen for the environment. What is the main idea?", options: ["Trees are beneficial", "Shade is important", "Oxygen is needed", "Trees are tall"], correctAnswer: "Trees are beneficial" },
+            { id: "E196", text: "Car is to road as boat is to:", options: ["Water", "Dock", "Shore", "Sail"], correctAnswer: "Water" },
+            { id: "E197", text: "A synonym for “small” is:", options: ["Tiny", "Big", "Large", "Huge"], correctAnswer: "Tiny" },
+            { id: "E198", text: "An antonym for “begin” is:", options: ["End", "Start", "Open", "Initiate"], correctAnswer: "End" },
+            { id: "E199", text: "Correct the sentence: The dog run fast.", options: ["The dog runs fast.", "The dog run faster.", "The dog running fast.", "The dog runs faster."], correctAnswer: "The dog runs fast." },
+            { id: "E200", text: "Correct the spelling: Neccessary", options: ["Necessary", "Neccessary", "Necesary", "Necassary"], correctAnswer: "Necessary" }
+        ]
+    };
+
+    function initializeQuestions() {
+        questionsData = allQuestions;
+    }
+    
+    function updateTimerDisplay() {
+        const hours = Math.floor(timeLeft / 3600);
+        const minutes = Math.floor((timeLeft % 3600) / 60);
+        const seconds = timeLeft % 60;
+        timerDisplay.textContent = 
+            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerDisplay();
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                submitTest(true);
+            }
+        }, 1000);
+    }
+
+    function displayQuestion() {
+        const subjectQuestions = questionsData[currentSubject];
+        const qIndex = currentQuestionIndices[currentSubject];
+        const question = subjectQuestions[qIndex];
+
+        questionHeader.textContent = `${currentSubject.charAt(0).toUpperCase() + currentSubject.slice(1)}: Question ${qIndex + 1} of ${subjectQuestions.length}`;
+        questionText.textContent = question.text;
+
+        optionsContainer.innerHTML = '';
+        question.options.forEach((option, index) => {
+            const optionId = `q${question.id}_opt${index}`;
+            const li = document.createElement('li');
+            const label = document.createElement('label');
+            label.htmlFor = optionId;
+            label.className = 'option-label';
+            
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.id = optionId;
+            radio.name = `q_${question.id}`;
+            radio.value = option;
+            radio.className = 'mr-2';
+
+            if (userSelections[question.id] === option) {
+                radio.checked = true;
+                label.classList.add('selected');
+            }
+            
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(option));
+            
+            label.addEventListener('click', (e) => {
+                document.querySelectorAll(`#optionsContainer .option-label`).forEach(l => l.classList.remove('selected'));
+                label.classList.add('selected');
+                userSelections[question.id] = option;
+                radio.checked = true;
+                updateAnsweredCounts();
+                updateNavigatorButtonStatus(question.id, true);
+            });
+            li.appendChild(label);
+            optionsContainer.appendChild(li);
+        });
+
+        prevBtn.disabled = qIndex === 0;
+        nextBtn.disabled = qIndex === subjectQuestions.length - 1;
+        
+        if (markedForReview[question.id]) {
+            markReviewBtn.textContent = 'Unmark Review';
+            markReviewBtn.classList.add('bg-yellow-200', 'text-yellow-700');
+            markReviewBtn.classList.remove('bg-yellow-400', 'text-yellow-800');
+        } else {
+            markReviewBtn.textContent = 'Mark for Review';
+            markReviewBtn.classList.remove('bg-yellow-200', 'text-yellow-700');
+            markReviewBtn.classList.add('bg-yellow-400', 'text-yellow-800');
+        }
+        updateActiveNavigatorButton();
+    }
+
+    function updateAnsweredCounts() {
+        mathAnsweredCountEl.textContent = Object.keys(userSelections).filter(id => id.startsWith('M')).length;
+        physicsAnsweredCountEl.textContent = Object.keys(userSelections).filter(id => id.startsWith('P')).length;
+        englishAnsweredCountEl.textContent = Object.keys(userSelections).filter(id => id.startsWith('E')).length;
+    }
+
+    function changeSubject(subject) {
+        if (testActive && currentSubject !== subject) {
+            const timeElapsed = Date.now() - lastSubjectChangeTime;
+            subjectTimeSpent[currentSubject] += timeElapsed;
+            lastSubjectChangeTime = Date.now();
+        }
+        currentSubject = subject;
+        subjectNavBtns.forEach(btn => {
+            btn.classList.remove('nav-button-active');
+            btn.classList.add('nav-button-inactive');
+            if (btn.dataset.subject === subject) {
+                btn.classList.add('nav-button-active');
+                btn.classList.remove('nav-button-inactive');
+            }
+        });
+        
+        populateQuestionNavigator();
+        displayQuestion();
+    }
+
+    function populateQuestionNavigator() {
+        questionNavigator.innerHTML = '';
+        const subjectQuestions = questionsData[currentSubject];
+        subjectQuestions.forEach((q, index) => {
+            const btn = document.createElement('button');
+            btn.textContent = index + 1;
+            btn.className = 'p-1 border rounded text-xs hover:bg-slate-200 transition-colors';
+            if (userSelections[q.id]) {
+                btn.classList.add('bg-sky-200');
+            } else {
+                btn.classList.add('bg-white');
+            }
+            if (markedForReview[q.id]) {
+                btn.classList.add('marked-for-review');
+            }
+            btn.addEventListener('click', () => {
+                currentQuestionIndices[currentSubject] = index;
+                displayQuestion();
+            });
+            questionNavigator.appendChild(btn);
+        });
+        updateActiveNavigatorButton();
+    }
+    
+    function updateActiveNavigatorButton() {
+        const qIndex = currentQuestionIndices[currentSubject];
+        const navigatorButtons = questionNavigator.children;
+        Array.from(navigatorButtons).forEach((btn, idx) => {
+            btn.classList.remove('ring-2', 'ring-sky-500', 'font-bold');
+            if (idx === qIndex) {
+                btn.classList.add('ring-2', 'ring-sky-500', 'font-bold');
+            }
+        });
+    }
+
+    function updateNavigatorButtonStatus(questionId, answered) {
+        const subjectQuestions = questionsData[currentSubject];
+        const qIndex = subjectQuestions.findIndex(q => q.id === questionId);
+        if (qIndex !== -1 && questionNavigator.children[qIndex]) {
+            const navBtn = questionNavigator.children[qIndex];
+            if (answered) {
+                navBtn.classList.add('bg-sky-200');
+                navBtn.classList.remove('bg-white');
+            }
+        }
+    }
+
+
+    function startTest() {
+        timeLeft = 3 * 60 * 60;
+        userSelections = {};
+        markedForReview = {};
+        currentQuestionIndices = { mathematics: 0, physics: 0, english: 0 };
+        subjectTimeSpent = { mathematics: 0, physics: 0, english: 0 }; // Reset time spent
+        currentSubject = 'mathematics';
+        testActive = true;
+
+        initializeQuestions();
+
+        welcomeScreen.classList.add('hidden');
+        analysisScreen.classList.add('hidden');
+        testScreen.classList.remove('hidden');
+
+        startTimer();
+        changeSubject('mathematics');
+        subjectStartTime[currentSubject] = Date.now(); // Record start time for first subject
+        lastSubjectChangeTime = Date.now();
+        updateAnsweredCounts();
+    }
+
+    function submitTest(autoSubmitted = false) {
+        if (!autoSubmitted) {
+            const unsavedChanges = confirm("Are you sure you want to submit the test? This action cannot be undone.");
+            if (!unsavedChanges) return;
+        }
+        
+        if (testActive) {
+            const timeElapsed = Date.now() - lastSubjectChangeTime;
+            subjectTimeSpent[currentSubject] += timeElapsed;
+        }
+
+        testActive = false;
+        clearInterval(timerInterval);
+        calculateResults();
+        testScreen.classList.add('hidden');
+        analysisScreen.classList.remove('hidden');
+    }
+
+    function calculateResults() {
+        let totalCorrect = 0;
+        let subjectScores = {
+            mathematics: { correct: 0, total: questionsData.mathematics.length, attempted: 0 },
+            physics: { correct: 0, total: questionsData.physics.length, attempted: 0 },
+            english: { correct: 0, total: questionsData.english.length, attempted: 0 }
+        };
+
+        for (const subject in questionsData) {
+            questionsData[subject].forEach(q => {
+                if (userSelections[q.id]) {
+                    subjectScores[subject].attempted++;
+                    if (userSelections[q.id] === q.correctAnswer) {
+                        subjectScores[subject].correct++;
+                        totalCorrect++;
+                    }
+                }
+            });
+        }
+        displayAnalysis(totalCorrect, subjectScores);
+    }
+
+    function displayAnalysis(totalCorrect, subjectScores) {
+        document.getElementById('overallScoreText').textContent = `${totalCorrect} / 200`;
+
+        const summaryDiv = document.getElementById('scoreSummary');
+        summaryDiv.innerHTML = `
+            <p><strong>Overall:</strong> ${totalCorrect} correct out of 200 questions (${((totalCorrect / 200) * 100).toFixed(1)}%)</p>
+            <p><strong>Mathematics:</strong> ${subjectScores.mathematics.correct} / ${subjectScores.mathematics.total} (${((subjectScores.mathematics.correct / subjectScores.mathematics.total) * 100).toFixed(1)}% accuracy) - Attempted: ${subjectScores.mathematics.attempted}</p>
+            <p><strong>Physics:</strong> ${subjectScores.physics.correct} / ${subjectScores.physics.total} (${((subjectScores.physics.correct / subjectScores.physics.total) * 100).toFixed(1)}% accuracy) - Attempted: ${subjectScores.physics.attempted}</p>
+            <p><strong>English:</strong> ${subjectScores.english.correct} / ${subjectScores.english.total} (${((subjectScores.english.correct / subjectScores.english.total) * 100).toFixed(1)}% accuracy) - Attempted: ${subjectScores.english.attempted}</p>
+            <h4 class="text-lg font-semibold mt-4 mb-2 text-sky-700">Time Management Analysis</h4>
+            ${Object.keys(subjectTimeSpent).map(subject => {
+                const timeInMinutes = (subjectTimeSpent[subject] / (1000 * 60)).toFixed(1);
+                const rec = recommendedTime[subject];
+                let feedback = '';
+                if (timeInMinutes < rec.min) {
+                    feedback = `(You were very fast! Consider reviewing for accuracy, but good pace.)`;
+                } else if (timeInMinutes > rec.max) {
+                    feedback = `(You spent more time than recommended. Focus on speeding up in this section.)`;
+                } else {
+                    feedback = `(Good time management for this section.)`;
+                }
+                return `<p><strong>${subject.charAt(0).toUpperCase() + subject.slice(1)}:</strong> ${timeInMinutes} minutes spent (Recommended: ${rec.min}-${rec.max} minutes) ${feedback}</p>`;
+            }).join('')}
+            <h4 class="text-lg font-semibold mt-4 mb-2 text-sky-700">Weakness Identification & Conceptual Feedback</h4>
+            <p class="text-sm text-slate-700">Review the "Detailed Question Review" below. For each incorrect answer, reflect on whether the mistake was due to a conceptual misunderstanding, a calculation error, or simply time pressure. This self-analysis is key to targeted improvement.</p>
+        `;
+        
+        renderCharts(totalCorrect, subjectScores);
+        renderDetailedReview(subjectScores);
+    }
+
+    function renderCharts(totalCorrect, subjectScores) {
+        const totalAttempted = subjectScores.mathematics.attempted + subjectScores.physics.attempted + subjectScores.english.attempted;
+        const totalUnattempted = 200 - totalAttempted;
+        const totalIncorrect = totalAttempted - totalCorrect;
+
+        const overallCtx = document.getElementById('overallScoreChart').getContext('2d');
+        if(overallScoreChartInstance) overallScoreChartInstance.destroy();
+        overallScoreChartInstance = new Chart(overallCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Correct', 'Incorrect', 'Unattempted'],
+                datasets: [{
+                    data: [totalCorrect, totalIncorrect, totalUnattempted],
+                    backgroundColor: ['#10b981', '#ef4444', '#9ca3af'],
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        const sectionalCtx = document.getElementById('sectionalScoreChart').getContext('2d');
+        if(sectionalScoreChartInstance) sectionalScoreChartInstance.destroy();
+        sectionalScoreChartInstance = new Chart(sectionalCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Mathematics', 'Physics', 'English'],
+                datasets: [{
+                    label: 'Accuracy (%)',
+                    data: [
+                        (subjectScores.mathematics.correct / subjectScores.mathematics.total) * 100,
+                        (subjectScores.physics.correct / subjectScores.physics.total) * 100,
+                        (subjectScores.english.correct / subjectScores.english.total) * 100
+                    ],
+                    backgroundColor: ['#3b82f6', '#14b8a6', '#f59e0b'],
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: 'Accuracy (%)' } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    function renderDetailedReview() {
+        const reviewContent = document.getElementById('detailedReviewContent');
+        reviewContent.innerHTML = ''; 
+
+        ['mathematics', 'physics', 'english'].forEach(subject => {
+            const subjectTitle = document.createElement('h4');
+            subjectTitle.className = 'text-lg font-semibold mt-4 mb-2 text-sky-600';
+            subjectTitle.textContent = subject.charAt(0).toUpperCase() + subject.slice(1);
+            reviewContent.appendChild(subjectTitle);
+
+            questionsData[subject].forEach((q, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'p-3 border border-slate-200 rounded-md mb-3';
+                
+                const qTextP = document.createElement('p');
+                qTextP.className = 'font-medium mb-1';
+                qTextP.innerHTML = `<strong>Q${index + 1}:</strong> ${q.text}`;
+                questionDiv.appendChild(qTextP);
+
+                const optionsUl = document.createElement('ul');
+                optionsUl.className = 'list-none pl-0 space-y-1 text-sm';
+                q.options.forEach(opt => {
+                    const optLi = document.createElement('li');
+                    optLi.textContent = opt;
+                    optLi.className = 'p-1.5 border rounded-md';
+
+                    if (opt === q.correctAnswer) {
+                        optLi.classList.add('correct-answer');
+                    }
+                    if (userSelections[q.id] === opt) {
+                        if (opt !== q.correctAnswer) {
+                            optLi.classList.add('user-selected-wrong');
+                        }
+                    } else if (!userSelections[q.id] && opt === q.correctAnswer) {
+                         optLi.classList.add('correct-answer');
+                    }
+
+
+                    optionsUl.appendChild(optLi);
+                });
+                questionDiv.appendChild(optionsUl);
+
+                if (userSelections[q.id]) {
+                    const userAnswerP = document.createElement('p');
+                    userAnswerP.className = 'text-xs mt-1';
+                    userAnswerP.innerHTML = `Your answer: <span class="${userSelections[q.id] === q.correctAnswer ? 'text-emerald-600 font-semibold' : 'text-red-600 font-semibold'}">${userSelections[q.id]}</span>`;
+                    questionDiv.appendChild(userAnswerP);
+                } else {
+                     const unattemptedP = document.createElement('p');
+                    unattemptedP.className = 'text-xs mt-1 text-slate-500 font-semibold';
+                    unattemptedP.textContent = 'Unattempted';
+                    questionDiv.appendChild(unattemptedP);
+                }
+                 if (userSelections[q.id] !== q.correctAnswer) {
+                    const correctAnswerP = document.createElement('p');
+                    correctAnswerP.className = 'text-xs mt-1 text-emerald-700 font-semibold';
+                    correctAnswerP.textContent = `Correct answer: ${q.correctAnswer}`;
+                    questionDiv.appendChild(correctAnswerP);
+                }
+
+
+                reviewContent.appendChild(questionDiv);
+            });
+        });
+    }
+
+
+    // Event Listeners
+    startTestBtn.addEventListener('click', startTest);
+    retakeTestBtn.addEventListener('click', startTest);
+
+    nextBtn.addEventListener('click', () => {
+        if (currentQuestionIndices[currentSubject] < questionsData[currentSubject].length - 1) {
+            currentQuestionIndices[currentSubject]++;
+            displayQuestion();
+        }
+    });
+
+    prevBtn.addEventListener('click', () => {
+        if (currentQuestionIndices[currentSubject] > 0) {
+            currentQuestionIndices[currentSubject]--;
+            displayQuestion();
+        }
+    });
+
+    markReviewBtn.addEventListener('click', () => {
+        const questionId = questionsData[currentSubject][currentQuestionIndices[currentSubject]].id;
+        markedForReview[questionId] = !markedForReview[questionId];
+        
+        const navBtn = questionNavigator.children[currentQuestionIndices[currentSubject]];
+        if (markedForReview[questionId]) {
+            navBtn.classList.add('marked-for-review');
+        } else {
+            navBtn.classList.remove('marked-for-review');
+        }
+        displayQuestion();
+    });
+
+    submitTestBtn.addEventListener('click', () => submitTest(false));
+
+    subjectNavBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            changeSubject(btn.dataset.subject);
+        });
+    });
+    
+    // Initial setup
+    updateTimerDisplay();
+    initializeQuestions();
+
+</script>
+</body>
+</html>
