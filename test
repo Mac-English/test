@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NUST Entry Test Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Visualization & Content Choices:
+        - Report Info: Test structure (Table 1 from report) -> Goal: Inform -> Presentation: HTML Table on Welcome Screen -> Interaction: Static display -> Justification: Clear, concise overview of test format.
+        - Report Info: MCQs (Mathematics, Physics, English sections with specified counts) -> Goal: Assess knowledge -> Presentation: Interactive form with radio buttons per question, one question at a time -> Interaction: User selection of one of four options, navigation (next/prev/mark for review), subject switching -> Justification: Standard MCQ test format, allows focused attention on each question.
+        - Report Info: 3-hour timer requirement -> Goal: Simulate exam conditions -> Presentation: Prominent countdown display in header, updated every second -> Interaction: Auto-updates, auto-submits on expiry (or alerts user) -> Justification: Critical for realistic simulation and time management practice.
+        - Report Info: Performance Metrics (Overall Score, Sectional Scores, Accuracy Rate per Subject - Section VI of report) -> Goal: Feedback/Analysis -> Presentation: Numeric scores, Bar Chart (Chart.js) for sectional accuracy comparison, Pie Chart (Chart.js) for overall correct/incorrect/unattempted breakdown, and detailed time spent per subject -> Interaction: Dynamic charts generated based on user's performance after test submission, textual feedback on time management -> Justification: Provides visual and quantitative summary of performance, including time management insights, for effective feedback and weakness identification.
+        - Report Info: Sample Questions from report (Math, Physics, English) -> Goal: Illustrate question types -> Presentation: Integrated into the respective sections of the mock test as actual questions -> Interaction: User attempts these as part of the test -> Justification: Provides realistic question examples within the test flow.
+        - Report Info: Strategic Recommendations (Section VII of report) -> Goal: Guide improvement -> Presentation: Textual list/summary on Analysis screen -> Interaction: Static display -> Justification: Offers actionable advice post-analysis based on report's conclusions.
+        - Report Info: No negative marking policy -> Goal: Inform test strategy -> Presentation: Mentioned in instructions -> Interaction: N/A -> Justification: Important for users to know they should attempt all questions.
+        CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. All visualizations via Chart.js (Canvas). Icons are Unicode characters.
+    -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Adjusted for better viewing */
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px; /* Adjusted */
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+                max-height: 400px; /* Adjusted */
+            }
+        }
+        .nav-button-active {
+            background-color: #0284c7; /* sky-600 */
+            color: white;
+        }
+        .nav-button-inactive {
+            background-color: #e5e7eb; /* gray-200 */
+            color: #374151; /* gray-700 */
+        }
+        /* Custom scrollbar for question list */
+        .question-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .question-list::-webkit-scrollbar-track {
+            background: #f1f5f9; /* slate-100 */
+        }
+        .question-list::-webkit-scrollbar-thumb {
+            background: #94a3b8; /* slate-400 */
+            border-radius: 4px;
+        }
+        .question-list::-webkit-scrollbar-thumb:hover {
+            background: #64748b; /* slate-500 */
+        }
+        .marked-for-review {
+            background-color: #fef9c3 !important; /* yellow-100 */
+            border: 1px solid #facc15; /* yellow-400 */
+        }
+         .option-label {
+            display: block;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db; /* gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+        }
+        .option-label:hover {
+            background-color: #f3f4f6; /* gray-100 */
+        }
+        .option-label input[type="radio"] {
+            display: none; /* Hide the actual radio button */
+        }
+        .option-label.selected {
+            background-color: #bfdbfe; /* blue-200 */
+            border-color: #3b82f6; /* blue-500 */
+        }
+        .correct-answer {
+            background-color: #d1fae5 !important; /* emerald-100 */
+            border: 1px solid #10b981 !important; /* emerald-500 */
+        }
+        .incorrect-answer {
+            background-color: #fee2e2 !important; /* red-100 */
+            border: 1px solid #ef4444 !important; /* red-500 */
+        }
+        .user-selected-wrong {
+             background-color: #fee2e2 !important; /* red-100 */
+            border: 1px solid #ef4444 !important; /* red-500 */
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex flex-col items-center min-h-screen p-2 sm:p-4">
+
+    <div id="app-container" class="w-full max-w-5xl bg-white shadow-xl rounded-lg">
+        <header class="bg-sky-700 text-white p-4 sm:p-6 rounded-t-lg flex justify-between items-center">
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold">NUST Entry Test Simulation</h1>
+            <div id="timer-container" class="text-lg sm:text-xl font-semibold bg-sky-800 px-3 py-1 rounded-md">
+                <span id="timer">03:00:00</span>
+            </div>
+        </header>
+
+        <main class="p-4 sm:p-6">
+            <div id="welcomeScreen">
+                <h2 class="text-2xl font-semibold mb-4 text-sky-700">Welcome to the NET Simulation!</h2>
+                <p class="mb-3">This mock test is designed to give you a realistic experience of the NUST Entry Test (NET) for Engineering programs. It follows the latest pattern and time constraints.</p>
+                <p class="mb-3"><strong>Test Structure:</strong></p>
+                <ul class="list-disc list-inside mb-4 pl-4 space-y-1">
+                    <li>Total Questions: 200 MCQs</li>
+                    <li>Total Time: 3 Hours (180 Minutes)</li>
+                    <li>No negative marking: Attempt all questions!</li>
+                </ul>
+                <div class="overflow-x-auto mb-6">
+                    <table class="min-w-full divide-y divide-slate-200 border border-slate-300">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Subject</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">MCQs</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Weightage</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Recommended Time</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-200">
+                            <tr>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-slate-900">Mathematics</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">100</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">50%</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">~90 mins</td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-slate-900">Physics</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">60</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">30%</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">~55 mins</td>
+                            </tr>
+                            <tr>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-slate-900">English</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">40</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">20%</td>
+                                <td class="px-4 py-2 whitespace-nowrap text-sm text-slate-500">~35 mins</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="mb-4 text-sm text-slate-600"><strong>Instructions:</strong> Navigate between sections using the subject buttons. Use "Next" and "Previous" to move between questions. You can "Mark for Review" and revisit questions later. The test will auto-submit when the timer ends.</p>
+                <button id="startTestBtn" class="w-full sm:w-auto bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-150 ease-in-out">
+                    Start Test
+                </button>
+            </div>
+
+            <div id="testScreen" class="hidden">
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="md:w-1/4 bg-slate-50 p-3 rounded-lg shadow">
+                        <h3 class="text-lg font-semibold mb-3 text-sky-700">Sections</h3>
+                        <div class="space-y-2 mb-4">
+                            <button id="navMathBtn" data-subject="mathematics" class="subject-nav-btn w-full text-left p-2 rounded-md nav-button-inactive hover:bg-sky-100">Mathematics (<span id="mathAnsweredCount">0</span>/100)</button>
+                            <button id="navPhysicsBtn" data-subject="physics" class="subject-nav-btn w-full text-left p-2 rounded-md nav-button-inactive hover:bg-sky-100">Physics (<span id="physicsAnsweredCount">0</span>/60)</button>
+                            <button id="navEnglishBtn" data-subject="english" class="subject-nav-btn w-full text-left p-2 rounded-md nav-button-inactive hover:bg-sky-100">English (<span id="englishAnsweredCount">0</span>/40)</button>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-2 text-sky-700">Question Navigator</h3>
+                        <div id="questionNavigator" class="question-list grid grid-cols-5 sm:grid-cols-6 md:grid-cols-4 lg:grid-cols-5 gap-1 max-h-60 overflow-y-auto p-1 border border-slate-200 rounded">
+                            </div>
+                         <p class="text-xs text-slate-500 mt-2">Yellow background indicates marked for review.</p>
+                    </div>
+
+                    <div class="md:w-3/4">
+                        <div id="questionContainer" class="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+                            <div class="flex justify-between items-center mb-3">
+                                <h2 id="questionHeader" class="text-xl font-semibold text-sky-700">Mathematics: Question 1 of 100</h2>
+                                <button id="markReviewBtn" class="text-sm bg-yellow-400 hover:bg-yellow-500 text-yellow-800 font-semibold py-1 px-3 rounded-md transition duration-150">
+                                    Mark for Review
+                                </button>
+                            </div>
+                            <p id="questionText" class="text-lg mb-5 min-h-[60px]"></p>
+                            <div id="optionsContainer" class="space-y-3">
+                                </div>
+                            <div class="mt-8 flex flex-col sm:flex-row justify-between items-center gap-3">
+                                <button id="prevBtn" class="w-full sm:w-auto bg-slate-500 hover:bg-slate-600 text-white font-semibold py-2 px-5 rounded-lg transition duration-150">Previous</button>
+                                <button id="nextBtn" class="w-full sm:w-auto bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-5 rounded-lg transition duration-150">Next</button>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex justify-end">
+                            <button id="submitTestBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-150">
+                                Submit Test
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="analysisScreen" class="hidden">
+                <h2 class="text-3xl font-semibold mb-6 text-sky-700 text-center">Test Performance Analysis</h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 class="text-xl font-semibold mb-3 text-center text-emerald-600">Overall Score</h3>
+                        <p id="overallScoreText" class="text-4xl font-bold text-center mb-4">0 / 200</p>
+                        <div class="chart-container mx-auto h-64 sm:h-72">
+                            <canvas id="overallScoreChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-lg">
+                        <h3 class="text-xl font-semibold mb-3 text-center text-emerald-600">Sectional Performance</h3>
+                         <p class="text-sm text-slate-500 text-center mb-2">(Accuracy %)</p>
+                        <div class="chart-container mx-auto h-64 sm:h-72">
+                            <canvas id="sectionalScoreChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                    <h3 class="text-xl font-semibold mb-4 text-sky-700">Summary</h3>
+                    <div id="scoreSummary" class="space-y-2">
+                        </div>
+                </div>
+
+                <div id="detailedReviewContainer" class="bg-white p-6 rounded-lg shadow-lg mb-8">
+                    <h3 class="text-xl font-semibold mb-4 text-sky-700">Detailed Question Review</h3>
+                    <p class="mb-4 text-sm text-slate-600">Review your answers. Correct answers are highlighted in green, your incorrect selections in red.</p>
+                    <div id="detailedReviewContent" class="space-y-6 max-h-[500px] overflow-y-auto p-2 border border-slate-200 rounded-md">
+                        </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                     <h3 class="text-xl font-semibold mb-4 text-sky-700">Strategic Recommendations (from Report)</h3>
+                     <ul class="list-disc list-inside space-y-2 text-sm text-slate-700">
+                        <li>Prioritize Conceptual Clarity: Focus on deeply understanding core concepts rather than rote memorization.</li>
+                        <li>Master Time Management: Regular practice with a timer is essential. Develop a personalized strategy.</li>
+                        <li>Leverage the No Negative Marking Policy: Attempt all questions.</li>
+                        <li>Utilize Past Papers and Mock Tests Extensively: Focus on the latest test pattern.</li>
+                        <li>Engage in Comprehensive Performance Analysis: Review mistakes thoroughly to identify weak areas.</li>
+                     </ul>
+                </div>
+
+                <div class="mt-8 text-center">
+                    <button id="retakeTestBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-150">
+                        Retake Test
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+<script>
+    // DOM Elements
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    const testScreen = document.getElementById('testScreen');
+    const analysisScreen = document.getElementById('analysisScreen');
+    const startTestBtn = document.getElementById('startTestBtn');
+    const timerDisplay = document.getElementById('timer');
+    const questionHeader = document.getElementById('questionHeader');
+    const questionText = document.getElementById('questionText');
+    const optionsContainer = document.getElementById('optionsContainer');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const markReviewBtn = document.getElementById('markReviewBtn');
+    const submitTestBtn = document.getElementById('submitTestBtn');
+    const subjectNavBtns = document.querySelectorAll('.subject-nav-btn');
+    const questionNavigator = document.getElementById('questionNavigator');
+    const retakeTestBtn = document.getElementById('retakeTestBtn');
+
+    const mathAnsweredCountEl = document.getElementById('mathAnsweredCount');
+    const physicsAnsweredCountEl = document.getElementById('physicsAnsweredCount');
+    const englishAnsweredCountEl = document.getElementById('englishAnsweredCount');
+
+    // Test State
+    let currentSubject = 'mathematics';
+    let currentQuestionIndices = { mathematics: 0, physics: 0, english: 0 };
+    let userSelections = {}; // Store as { 'm1': 'A', 'p5': 'C' }
+    let markedForReview = {}; // Store as { 'm1': true }
+    let timeLeft = 3 * 60 * 60; // 3 hours in seconds
+    let timerInterval;
+    let testActive = false;
+    let questionsData = {}; // This will hold the SHUFFLED questions
+    let overallScoreChartInstance, sectionalScoreChartInstance;
+
+    // Time tracking variables
+    let subjectStartTime = {};
+    let subjectTimeSpent = { mathematics: 0, physics: 0, english: 0 };
+    let lastSubjectChangeTime = 0;
+
+    // Recommended time allocations (from the report)
+    const recommendedTime = {
+        mathematics: { min: 80, max: 95, avg: 90 }, // in minutes
+        physics: { min: 45, max: 55, avg: 55 },
+        english: { min: 30, max: 40, avg: 35 }
+    };
+
+    // --- Question Data from mcqs.docx and keys.docx, and new PDFs ---
+    // Manually parsed and structured data from the provided files.
+    // The 'id' is constructed as SubjectPrefix + QuestionNumber (e.g., M1, P101, E161)
+    // The 'correctAnswer' is the full text of the correct option.
+
+    const rawQuestions = {
+        mathematics: [
+            { id: "M1", text: "Modulus of iota is equal to:", options: ["i", "-1", "1", "-1"], correctAnswer: "1" },
+            { id: "M2", text: "Additive inverse of complex number (a, b) is written as:", options: ["(-a, b)", "(a, b)", "(-a, -b)", "(1/a,1/b)"], correctAnswer: "(-a, -b)" },
+            { id: "M3", text: "If $a>b$, then according to addition properties of inequalities $a+c$:", options: [">$a+b$", "<$a+b$", "=$a+b$", "None of these"], correctAnswer: "None of these" },
+            { id: "M4", text: "What is the area of the rectangular room with length of 5-3i and width of 2i", options: ["$6+10i$", "5-i", "16", "8"], correctAnswer: "$6+10i$" },
+            { id: "M5", text: "Real component of $(4-i)^2$ is:", options: ["8", "15", "23", "7"], correctAnswer: "15" },
+            { id: "M6", text: "Additive inverse of $2+\sqrt{3}i$ is:", options: ["$2-\sqrt{3}i$", "$-2+\sqrt{3}i$", "$-2-\sqrt{3}i$", "-0.5-0.3i"], correctAnswer: "$-2-\sqrt{3}i$" },
+            { id: "M7", text: "What is the real component of the complex number $(4-i)^2$?", options: ["-8", "17", "15", "Missing information"], correctAnswer: "15" },
+            { id: "M8", text: "Iota expressed in the form of coordinates is:", options: ["(0,1)", "(1,0)", "(0,0)", "It is impossible to express a complex number in the form of coordinates"], correctAnswer: "(0,1)" },
+            { id: "M9", text: "Which one of the following is the real part of the complex number: $6(2-3i)$?", options: ["2", "12", "-3", "6"], correctAnswer: "12" },
+            { id: "M10", text: "Which of the following is the associative law for the sets", options: ["A $\\cup$ (B $\\cup$ C)=(A $\\cup$ B) $\\cap$ C", "A$\\cup$(B$\\cup$C)=A$\\cap$(B$\\cup$C)", "A$\\cup$(B$\\cup$C)=(A$\\cup$B)$\\cup$C", "None of these"], correctAnswer: "A$\\cup$(B$\\cup$C)=(A$\\cup$B)$\\cup$C" },
+            { id: "M11", text: "If A and B, B and C are overlapping while A and C are disjoint sets. Which of the following shows the sets:", options: ["A= Set of Natural Numbers, B= Set of Even Integers, C= Set of Odd Integers", "A= Set of squares of natural number, B= Set of Even Natural Numbers, C= Set of Rational Numbers", "A= Set of Rational Numbers, B= Set of Real Numbers, C= Set of Irrational Numbers", "None of these"], correctAnswer: "A= Set of Rational Numbers, B= Set of Real Numbers, C= Set of Irrational Numbers" },
+            { id: "M12", text: "If A $\\cap$ B = A $\\cup$ B what you can say about A and B?", options: ["A and B are disjoint sets", "A and B are overlapping sets", "A is subset of B", "A and B are equal sets"], correctAnswer: "A and B are equal sets" },
+            { id: "M13", text: "Which of the following shows that {A} is a subset of the other set?", options: ["A=[0, A, B]", "A=[0,B]", "A=[A,B]", "None of these"], correctAnswer: "None of these" },
+            { id: "M14", text: "If A is subset of B then B is super set of A, this condition holds for which option?", options: ["A=B", "A$\\subseteq$B", "B$\\subseteq$A", "None of these"], correctAnswer: "A$\\subseteq$B" },
+            { id: "M15", text: "Which one of the following properties of sets is said to be the commutative property?", options: ["A $\\cup$ B=B $\\cup$ A", "A=B", "A $\\cup$(B $\\cup$ C)=(A $\\cup$ B) $\\cup$ C", "A'=U-A"], correctAnswer: "A $\\cup$ B=B $\\cup$ A" },
+            { id: "M16", text: "If A={a,b,c}. Number of subsets of set A will be?", options: ["4", "6", "8", "12"], correctAnswer: "8" },
+            { id: "M17", text: "If A={1,2,3}, B={0,4,5}, then find the number of subsets of A $\\cup$ B", options: ["64", "8", "6", "32"], correctAnswer: "64" },
+            { id: "M18", text: "Find the value of x if $|-1~3~4|=-30~10$", options: ["-2,3", "3,-4", "2,-3", "4,-3"], correctAnswer: "2,-3" },
+            { id: "M19", text: "Determinant of [212; 373] is:", options: ["24", "12", "-44", "None of these"], correctAnswer: "None of these" },
+            { id: "M20", text: "Null matrix of order $1\\times2$ is:", options: ["$[0]$", "$[0~0]$", "$[0~0~0]$", "Both a and b"], correctAnswer: "$[0~0]$" },
+            { id: "M21", text: "Orders of some matrices are given below. Which one of them cannot be multiplied?", options: ["$m\\times n$, $n\\times p$ where m, n and p are all positive integers", "a x b, $b\\times c$ where a, b and c are all positive integers", "$1\\times2$, 2 x 6", "$3\\times5$, $4\\times1$"], correctAnswer: "$3\\times5$, $4\\times1$" },
+            { id: "M22", text: "$ax^2+bx+c=0$ has only one root if", options: ["$a=0$", "$b=0$", "$c=0$", "$ab=0$"], correctAnswer: "$a=0$" },
+            { id: "M23", text: "If $x=3y$ and $3x-2y=7$ then $y=?$", options: ["1", "1.5", "2.5", "3"], correctAnswer: "1" },
+            { id: "M24", text: "Sum of reciprocals of 4th roots of unity is?", options: ["0", "1", "i", "2"], correctAnswer: "0" },
+            { id: "M25", text: "Real fourth roots of unity are:", options: ["0, 1", "1, -1", "1, -1, i, -i", "0, 1, i"], correctAnswer: "1, -1" },
+            { id: "M26", text: "The sum of all fourth root of unity is", options: ["1", "0", "-1", "w"], correctAnswer: "0" },
+            { id: "M27", text: "What will be the value of a in $x^4+x^3+ax+1$ if 1 is the root of the equation?", options: ["0", "1", "-3", "-2"], correctAnswer: "-3" },
+            { id: "M28", text: "Which of the following are the roots of the equation $x^2-3x-4=0$?", options: ["1, 4", "3, 4", "-1, 4", "-3, 4"], correctAnswer: "-1, 4" },
+            { id: "M29", text: "Cube roots of unity are?", options: ["$1,w,w^2$", "-1,1,w", "-1,1,w^2", "None of these"], correctAnswer: "$1,w,w^2$" },
+            { id: "M30", text: "Product of cube root of unity is", options: ["1", "0", "-1", "w"], correctAnswer: "1" },
+            { id: "M31", text: "$w^{-23}+w^{-28}$", options: ["$w^2$", "0", "2w", "1"], correctAnswer: "2w" },
+            { id: "M32", text: "The equation which does not change by replacing x with $1/x$ is known as:", options: ["Linear", "Quadratic", "Proportional", "None of these"], correctAnswer: "None of these" },
+            { id: "M33", text: "If n is any real number and $w^n=w^2$ where w is cube root of unity, which of the following can be a possible value of n?", options: ["4", "6", "-2", "-1"], correctAnswer: "-1" },
+            { id: "M34", text: "If $\\alpha$ and $\\beta$ are the roots of the equation $ax^2+bx+c=0$, then the equation with roots $1/\\alpha$ and $1/\\beta$ is:", options: ["$x^2/a + x/b + 1/c = 0$", "$cy^2+by+a=0$", "$y^2+by+c=0$", "$ax^2+bx+c=0$"], correctAnswer: "$cy^2+by+a=0$" },
+            { id: "M35", text: "If $x^4-3x^2-4=0$ then its roots are:", options: ["2, -2, i and -i", "1, -1, i and -i", "i", "Impossible to determine"], correctAnswer: "2, -2, i and -i" },
+            { id: "M36", text: "For an A.P. if t1 is 3 and t10 is 39 then S10 is", options: ["210", "212", "216", "214"], correctAnswer: "210" },
+            { id: "M37", text: "What is the geometric mean between 9 and 4?", options: ["6", "6i", "-6i", "7.5"], correctAnswer: "6" },
+            { id: "M38", text: "Next number of series 5, 8, 11, 14, 17...", options: ["20", "19", "21", "18"], correctAnswer: "20" },
+            { id: "M39", text: "9th number of series is? 1, 4, 8, 13, 19...", options: ["53", "34", "43", "54"], correctAnswer: "53" },
+            { id: "M40", text: "Two A.Ms between 5 and 11 are:", options: ["7, 8", "7, 9", "6, 8", "6.5, 8.5"], correctAnswer: "7, 9" },
+            { id: "M41", text: "If 2 and 32 are in G.P. Find their geometric mean", options: ["8", "-8", "16", "-16"], correctAnswer: "8" },
+            { id: "M42", text: "If $a_{12}=19$ and $a_{17}=29$, what will be the value of the common difference?", options: ["1", "2", "3", "4"], correctAnswer: "2" },
+            { id: "M43", text: "1, $1/3$, $1/5$, $1/7...$ is:", options: ["Geometric", "Arithmetic", "Harmonic", "None"], correctAnswer: "Harmonic" },
+            { id: "M44", text: "Calculate exact value of repeating decimal 0.4545...", options: ["5/11", "50/11", "0.5/11", "None"], correctAnswer: "5/11" },
+            { id: "M45", text: "2, 2, 2, 2, 2, 2 is an arithmetic sequence with common difference", options: ["0", "2", "4", "It's not arithmetic sequence"], correctAnswer: "0" },
+            { id: "M46", text: "Sum of the series $0.2+0.02+0.002...$ up to infinite terms is:", options: ["$1/3$", "$1/6$", "$2/9$", "$3/12$"], correctAnswer: "$2/9$" },
+            { id: "M47", text: "$1+2+3+4+...+100$", options: ["5050", "5000", "2550", "4500"], correctAnswer: "5050" },
+            { id: "M48", text: "$2+4+6+...+100$", options: ["2250", "2550", "1275", "1775"], correctAnswer: "2550" },
+            { id: "M49", text: "A.M of $1/4$ and $3/8$ is:", options: ["$10/8$", "5/16", "6/16", "$5/8$"], correctAnswer: "5/16" },
+            { id: "M50", text: "Which of the following series has $r=0.5$?", options: ["1, 1.5, 2, 2.5...", "2, 4, 8, 16 ...", "256, 128, 64, 32 ...", "All of these"], correctAnswer: "256, 128, 64, 32 ..." },
+            { id: "M51", text: "The series $1+1+1+1+...$ is:", options: ["Convergent", "Divergent", "Neither convergent nor divergent", "Both convergent and divergent"], correctAnswer: "Divergent" },
+            { id: "M52", text: "What is the sum of the following series? $8+4+2+...+1/32$", options: ["495/32", "625/32", "511/32", "None of these"], correctAnswer: "511/32" },
+            { id: "M53", text: "What is the difference between the arithmetic mean and the geometric mean of 5 and 7?", options: ["0.8", "0.08", "0.008", "0.0008"], correctAnswer: "0.08" },
+            { id: "M54", text: "What is the nth term of the sequence: 1, 3, 5, 7...?", options: ["2n-1", "$2n+3$", "2n", "It is impossible to find the nth term for such a sequence"], correctAnswer: "2n-1" },
+            { id: "M55", text: "What is the sum of the first 50 natural numbers?", options: ["500", "1275", "1200", "8900"], correctAnswer: "1275" },
+            { id: "M56", text: "What are three AMs between -18 and 4?", options: ["12.5, 7 and 1.5", "AM can't be found between a negative and a positive number", "-12.5, -7 and -1.5", "1, 2 and 3"], correctAnswer: "-12.5, -7 and -1.5" },
+            { id: "M57", text: "Sum the series upto n terms.: $1+3+5+...$", options: ["$n^2$", "In $e^2$", "2n", "ne"], correctAnswer: "$n^2$" },
+            { id: "M58", text: "What is the G.M of 32 and 64", options: ["48", "45.12", "-48", "-45.12"], correctAnswer: "45.12" },
+            { id: "M59", text: "The 11th Term of the Series will be... 2, 5/2, 3 ...", options: ["11/2", "14/2", "22/2", "17/2"], correctAnswer: "14/2" },
+            { id: "M60", text: "Calculate S8 given: $t1=8$ and $r=-1/2$", options: ["-25/2", "85/16", "55/8", "-95/32"], correctAnswer: "85/16" },
+            { id: "M61", text: "Which of the following series converges?", options: ["$S=-1-1-1-...$", "$S=1+1/2+1/4+...$", "$S=1+1+1+1+...$", "$S=2+4+8+...$"], correctAnswer: "$S=1+1/2+1/4+...$" },
+            { id: "M62", text: "Two dies are thrown simultaneously. What is the probability that the sum of numbers shown at the top is 5?", options: ["$1/3$", "4/5", "$1/7$", "$1/9$"], correctAnswer: "$1/9$" },
+            { id: "M63", text: "How many diagonals can be formed of 7-sided polygon figure?", options: ["14", "21", "19", "23"], correctAnswer: "14" },
+            { id: "M64", text: "The probability of picking rotten apples in a box is $1/100$. If there are 6 boxes containing 1200 apples, then how many rotten apples would be obtained?", options: ["2", "24", "6", "12"], correctAnswer: "12" },
+            { id: "M65", text: "If $nP4 \\times nC3=96$ then $n=?$", options: ["1", "3", "4", "6"], correctAnswer: "4" },
+            { id: "M66", text: "If a die rolled twice, what is the probability that the numbers showing on top add up to 8?", options: ["$2/36$", "2/4", "4/36", "$5/36$"], correctAnswer: "$5/36$" },
+            { id: "M67", text: "Total number of 5 digits formed from 1, 2, 3, 4, 5 such that 1 and 5 never come next to each other.", options: ["24", "48", "72", "120"], correctAnswer: "72" },
+            { id: "M68", text: "Probability of picking a diamond card in a 52 cards deck is:", options: ["1/13", "$1/4$", "$13/26$", "$12/53$"], correctAnswer: "$1/4$" },
+            { id: "M69", text: "In how many ways can be letters of the word COCOCOLA be arranged when all letters are to be used?", options: ["280", "40320", "1120", "6720"], correctAnswer: "1120" },
+            { id: "M70", text: "What is the probability of picking a queen or a face card from a set of 52 cards?", options: ["14/3", "$3/13$", "$4/13$", "$1/4$"], correctAnswer: "$3/13$" },
+            { id: "M71", text: "Probability of any event cannot have the value of:", options: ["$1/5$", "$1/8$", "$1/2$", "$3/2$"], correctAnswer: "$3/2$" },
+            { id: "M72", text: "Tickets numbered 1 to 20 are mixed up and then a ticket is drawn at random. What is the probability that the ticket drawn has a number which is a multiple of 3 or 5?", options: ["$1/2$", "2/5", "8/15", "$9/20$"], correctAnswer: "$9/20$" },
+            { id: "M73", text: "How many 6-digit numbers can be formed without repeating any digit from the digits 0, 1, 2, 3, 4 and 5?", options: ["600", "720", "96", "120"], correctAnswer: "600" },
+            { id: "M74", text: "Sum of coefficients in expansion of $(x+y)^5$ is?", options: ["30", "31", "32", "none"], correctAnswer: "32" },
+            { id: "M75", text: "What is the coefficient of $a^8b^4$ in the expansion $(a+b)^{12}$?", options: ["494", "495", "496", "497"], correctAnswer: "495" },
+            { id: "M76", text: "How many terms are there in the expansion of $(1+x)^n$?", options: ["2n", "$n^2$", "$n+1$", "$n-1$"], correctAnswer: "$n+1$" },
+            { id: "M77", text: "What is the coefficient of fourth power of 'x' in $(2-x)^6$?", options: ["60", "10", "$6/4$", "2"], correctAnswer: "60" },
+            { id: "M78", text: "If $\\sin(x)=1/2$ where x is in 1st quadrant, find the values of $\\tan(2x)$", options: ["1", "-1", "1.732", "-1.732"], correctAnswer: "1.732" },
+            { id: "M79", text: "The value of $\\sin 13 \\cos 77 + \\cos 13 \\sin 77 =?$", options: ["0", "1", "$\\cos 26$", "$\\sin 26$"], correctAnswer: "1" },
+            { id: "M80", text: "If the value of cosine of a angle is -0.5. Then what will be the value for half of that angle for sine.", options: ["0.5", "-0.5", "0.866", "0.707"], correctAnswer: "0.866" },
+            { id: "M81", text: "What is the sine inverse of $\\sin(\\pi/2)$?", options: ["1", "$\\pi/2$ radians", "90 degrees", "Both B and C"], correctAnswer: "Both B and C" },
+            { id: "M82", text: "What is the domain of the inverse cosecant function?", options: ["[-1,1]", "R", "R- (-1,1)", "(-1,1)"], correctAnswer: "R- (-1,1)" },
+            { id: "M83", text: "Evaluate: $\\sin^{-1}(3/4) + \\sin^{-1}(\\sqrt{7}/4)$", options: ["$\\cos^{-1}$", "$\\sin^{-1}$", "$\\tan^{-1}$", "All of these"], correctAnswer: "All of these" },
+            { id: "M84", text: "How many hours are there in 360 degrees?", options: ["21600", "360", "60", "3.14"], correctAnswer: "360" },
+            { id: "M85", text: "Which is the same as $\\sin(-a)$?", options: ["$-\\sin(a)$", "$\\sin(a)$", "$-\\tan(a)/\\sec(a)$", "Both A and C"], correctAnswer: "Both A and C" },
+            { id: "M86", text: "If in a triangle, $a=200,$ $b=120$ and $\\gamma=150$ degrees, then what is the area of the triangle?", options: ["10932", "Impossible to determine", "7050", "6000"], correctAnswer: "6000" },
+            { id: "M87", text: "Evaluate: $(\\sin(\\theta)-1)^2+(\\sin(\\theta)+1)^2$", options: ["$2(1+\\sin^2\\theta)$", "$1+\\sin^2\\theta$", "1", "$2+(\\sin^2)(\\theta)$"], correctAnswer: "$2(1+\\sin^2\\theta)$" },
+            { id: "M88", text: "Division is a binary operation in.", options: ["The set of rational numbers.", "The set of real numbers.", "The set of real numbers.", "the set R-(0)"], correctAnswer: "the set R-(0)" },
+            { id: "M89", text: "What is the value of $2^3 \\times 2^4$?", options: ["8", "32", "64", "128"], correctAnswer: "128" },
+            { id: "M90", text: "Solve for $x$: $5x - 7 = 18$", options: ["5", "4", "3", "2"], correctAnswer: "5" },
+            { id: "M91", text: "Simplify: $(x^2)^3$", options: ["$x^5$", "$x^6$", "$x^9$", "$x^8$"], correctAnswer: "$x^6$" },
+            { id: "M92", text: "What is $\\sin 30^\\circ$?", options: ["0.5", "0.866", "0.707", "1"], correctAnswer: "0.5" },
+            { id: "M93", text: "If $\\tan \\theta = 1$, what is $\\theta$ in degrees?", options: ["30°", "45°", "60°", "90°"], correctAnswer: "45°" },
+            { id: "M94", text: "Find the derivative of $f(x) = 3x^2 + 2x$.", options: ["$3x + 2$", "$6x + 2$", "$6x + 1$", "$3x^2 + 2$"], correctAnswer: "$6x + 2$" },
+            { id: "M95", text: "Evaluate the integral $\\int 4x \\, dx$.", options: ["$2x^2 + C$", "$4x^2 + C$", "$x^4 + C$", "$2x + C$"], correctAnswer: "$2x^2 + C$" },
+            { id: "M96", text: "Find the limit: $\\lim_{x \\to 3} \\frac{x^2 - 9}{x - 3}$", options: ["3", "6", "9", "Does not exist"], correctAnswer: "6" },
+            { id: "M97", text: "What is the solution to the quadratic equation $x^2 - 5x + 6 = 0$?", options: ["1 and 6", "2 and 3", "-2 and 3", "-1 and 6"], correctAnswer: "2 and 3" },
+            { id: "M98", text: "What is the value of $\\cos 60^\\circ$?", options: ["0.5", "0.866", "0.707", "1"], correctAnswer: "0.5" },
+            { id: "M99", text: "The coefficient of x² in the expansion of (1 + 2x)⁴ is:", options: ["24", "16", "32", "8"], correctAnswer: "24" },
+            { id: "M100", text: "The sum of the series 1 + 3 + 5 + ... + 19 is:", options: ["100", "90", "110", "80"], correctAnswer: "100" }
+        ],
+        physics: [
+            { id: "P1", text: "The vector quantity in the following", options: ["Distance", "Impulse", "Energy", "1"], correctAnswer: "Impulse" },
+            { id: "P2", text: "The magnitude of the resultant of two forces is 2F. if the magnitude of each force is F, then angle b/w these forces is", options: ["00", "900", "1200", "1800"], correctAnswer: "1200" },
+            { id: "P3", text: "Three vectors of equal magnitude are acting on the three sides of an equilateral triangle. The magnitude of their resultant is", options: ["0", "3", "$\\sqrt{3}$", "1.72"], correctAnswer: "0" },
+            { id: "P4", text: "The physical quantity which produces angular acceleration in the body is", options: ["Force", "Moment of inertia", "Impulse", "Torque"], correctAnswer: "Torque" },
+            { id: "P5", text: "The point at which an applied force produces linear motion but no rotatory motion is", options: ["Mid-point", "Centre of gravity", "Optical center", "Pole"], correctAnswer: "Centre of gravity" },
+            { id: "P6", text: "Bodies which fall freely under the action of gravity is an example of", options: ["Uniform acceleration", "Variable acceleration", "Uniform velocity", "Average velocity"], correctAnswer: "Uniform acceleration" },
+            { id: "P7", text: "The property of the moving object by virtue of which it experts forces on the object that tries to stop it is", options: ["Inertia of body", "Quantity of motion of body", "acceleration of body", "all of these"], correctAnswer: "Quantity of motion of body" },
+            { id: "P8", text: "the dot product of force and velocity is equal to", options: ["power", "impulse", "couple", "momentum"], correctAnswer: "power" },
+            { id: "P9", text: "the escape velocity from the earth gravitational field depend upon", options: ["rotation of earth", "mass of body", "radius of body", "mass of earth"], correctAnswer: "mass of earth" },
+            { id: "P10", text: "if the velocity of a body becomes half, the kinetic energy of body will become", options: ["one fourth", "double", "four times", "half"], correctAnswer: "one fourth" },
+            { id: "P11", text: "a 60kg man In a lift which is moving upward with an acceleration of 4.8m/s2 will have apparent weight of", options: ["588N", "294N", "58.8N", "882N"], correctAnswer: "882N" },
+            { id: "P12", text: "The apparent weight of pilot when diving down in a jet plane with an acceleration of 9.8m/s2 will become", options: ["Double", "Half", "-ive", "0"], correctAnswer: "0" },
+            { id: "P13", text: "The geostationary satellites are", options: ["Stationary W.R.T earth", "rotating W.R.T earth", "rotating very fast", "rotating very slow"], correctAnswer: "Stationary W.R.T earth" },
+            { id: "P14", text: "[MLT] are the dimensions of", options: ["Angular momentum", "Power", "Impulse", "Viscosity"], correctAnswer: "Impulse" },
+            { id: "P15", text: "A two meter high tank is full of water a hole is made in the middle of the tank. The speed of efflux is", options: ["4.9m/s", "9.8m/s", "4.42m/s", "3.75m/s"], correctAnswer: "4.42m/s" },
+            { id: "P16", text: "The quantity which specifies the displacement as well as the direction of motion in simple harmonic motion is the", options: ["Phase angle", "Angular frequency", "Path difference", "None"], correctAnswer: "Phase angle" },
+            { id: "P17", text: "The number of loops in stationary waves depends upon", options: ["Velocity of waves", "Wavelength of wave", "Nature of the medium", "Frequency of waves"], correctAnswer: "Wavelength of wave" },
+            { id: "P18", text: "When the light enters from air to glass, it suffers a change in the", options: ["Wavelength of light", "speed of light", "Frequency of light", "Wavelength and speed of light"], correctAnswer: "Wavelength and speed of light" },
+            { id: "P19", text: "Which one of the following properties of light does not change with the nature of medium?", options: ["Frequency of light", "Wavelength of light", "speed of light", "all of these"], correctAnswer: "Frequency of light" },
+            { id: "P20", text: "we can hear sound around the corner but cannot see because of", options: ["interface", "diffraction", "polarization", "dispersion"], correctAnswer: "diffraction" },
+            { id: "P21", text: "The powers of the objective and eye piece of telescope are 0.5 diopter and 10 diopter respectively. The magnifying power of telescope is", options: ["0.5", "10", "20", "0.05"], correctAnswer: "20" },
+            { id: "P22", text: "At constant temperature when the volume of the given mass of gas is doubled its density becomes", options: ["Double", "one fourth", "four times", "half"], correctAnswer: "half" },
+            { id: "P23", text: "the correct expression for the coulomb's law/force is", options: ["F=(1/k)(q1q2/r2)", "F= (k)(q1q2/r2)", "F= 4$\\pi \\epsilon$ (q1q2/r2)", "F=(k)(r2/q1q2)"], correctAnswer: "F= (k)(q1q2/r2)" },
+            { id: "P24", text: "The wave nature of an electron is illustrated by its", options: ["Photoelectric effect", "Compton effect", "Penetrating effect", "Diffraction"], correctAnswer: "Diffraction" },
+            { id: "P25", text: "The potential gradient between the two charged plates having, separation of 0.5cm and potential difference of 12 volts is", options: ["240 NC-1", "24 NC-1", "2.4 NC-1", "2400 NC-1"], correctAnswer: "2400 NC-1" },
+            { id: "P26", text: "The rate of change of electric potential w.r.t displacement is equal to", options: ["Potential gradient", "Electric potential energy", "Electric intensity", "Electric flux"], correctAnswer: "Potential gradient" },
+            { id: "P27", text: "A wire of uniform cross section A, length 1 and resistance R is cut into two equal pieces. The resistivity of each piece will be", options: ["The same", "One fourth", "Double", "One half"], correctAnswer: "The same" },
+            { id: "P28", text: "Two metallic conductors have the same value of resistivity. These conductors can be differentiated from the values of their", options: ["Temperature coefficient", "Resistance", "Conductance", "Conductivity"], correctAnswer: "Temperature coefficient" },
+            { id: "P29", text: "The S.I unit of magnetic flux is weber which is equal to:", options: ["Nm/A", "Nm2/A1", "NA/m1", "NA/m2"], correctAnswer: "Nm/A" },
+            { id: "P30", text: "An electron and proton are projected with same velocity normal to magnetic field which one will suffer greater deflection", options: ["Proton", "Electron", "Both will suffer greater defection", "None"], correctAnswer: "Electron" },
+            { id: "P31", text: "The magnetic field due to current in solenoids can be increased by", options: ["Increasing the number of turns per unit length", "Using soft iron core", "Increasing the current", "All of these"], correctAnswer: "All of these" },
+            { id: "P32", text: "Volt x second /ampere is equal to", options: ["Gauss", "Weber", "Henry", "Tesla"], correctAnswer: "Henry" },
+            { id: "P33", text: "The counter torque produced in the moving coil of generator is called", options: ["Restoring torque", "Deflection torque", "Back motor torque", "All of these"], correctAnswer: "Back motor torque" },
+            { id: "P34", text: "The process of combining low frequency signal with high frequency carries waves is called", options: ["Rectification", "Amplification", "Modulation", "Magnification"], correctAnswer: "Modulation" },
+            { id: "P35", text: "The process by which the potential barrier of the depletion region can be increased or decreased is called", options: ["Amplification", "Biasing", "Modulation", "Doping"], correctAnswer: "Biasing" },
+            { id: "P36", text: "The color of light emitted by light emitting diode depends upon", options: ["Forward voltage", "Reverse current", "Forward current", "Type of semiconductors"], correctAnswer: "Type of semiconductors" },
+            { id: "P37", text: "If the temperature of the black body becomes double the intensity of radiation from it will become", options: ["Double", "Four time", "Six times", "Sixteen time"], correctAnswer: "Sixteen time" },
+            { id: "P38", text: "The scattering angle for which the Compton shift in wavelength is equal to Compton wavelength is", options: ["$\\theta=90^0$", "$\\theta=0^0$", "$\\theta=45^0$", "$\\theta=180^0$"], correctAnswer: "$\\theta=90^0$" },
+            { id: "P39", text: "The uncertainty in energy of photon which is emitted from an atom radiating for $10^4$ second is", options: ["$4\\times10^{-7}$ joules", "$4\\times10^{-17}$ eV", "$6.6\\times10^{-20}$ eV", "$4\\times10$ joule"], correctAnswer: "$6.6\\times10^{-20}$ eV" },
+            { id: "P40", text: "If an atom exists in the excited state $n=5$, the maximum number of transition takes place is", options: ["6", "4", "10", "3"], correctAnswer: "10" },
+            { id: "P41", text: "When the voltage of the target in the x ray tube increases then the", options: ["Penetrating power of x rays increase", "Intensity of x ray increases", "Wavelength of x ray increase", "All of these"], correctAnswer: "Penetrating power of x rays increase" },
+            { id: "P42", text: "The situation in which then excited state i.e metastable state contains more number of electrons than the ground is called", options: ["lonized state", "Stimulation state", "Population state", "All of these"], correctAnswer: "Population state" },
+            { id: "P43", text: "Bromine has two isotopes having the relative abundance as $75Br39=$ 50.51% and $81Br35=49.49\%.$ the average atomic mass of bromine is", options: ["81", "80", "79.5", "79"], correctAnswer: "80" },
+            { id: "P44", text: "The number of oxygen atoms in 4.4g of carbon dioxide is approximately?", options: ["$1.2\\times10^{23}$", "6 x $10^{22}$", "6 x $10^{23}$", "$12\\times10^{23}$"], correctAnswer: "$1.2\\times10^{23}$" },
+            { id: "P45", text: "If NA is Avogadro's number, then number, then number of valence electrons in 4.2g of nitride ions N3 - is", options: ["2.4 NA", "4.2 NA", "1.6 NA", "3.2 NA"], correctAnswer: "2.4 NA" },
+            { id: "P46", text: "The presence of common ions the solubility of a slightly soluble ionic compound.", options: ["Decreases", "Increases", "Neither decrease nor increase", "None"], correctAnswer: "Decreases" },
+            { id: "P47", text: "An organic compound contains 49.3% carbon, 6.84% hydrogen and its vapors density is 73. Molecular formula of compound is", options: ["C3H5O2", "C6H10O4", "C3H10O2", "C4H10O2"], correctAnswer: "C6H10O4" },
+            { id: "P48", text: "The number of atoms in 0.004g of magnesium is close to", options: ["24", "2 x$10^{20}$", "$10^{20}$", "$6.02\\times10^{23}$"], correctAnswer: "$10^{20}$" },
+            { id: "P49", text: "Kinetic energy of one mole of an ideal gas at 300K in kj is", options: ["34.8", "3.48", "3.74", "348"], correctAnswer: "3.74" },
+            { id: "P50", text: "Which one of the following series are observed in the visible region of electromagnetic radiation", options: ["Lyman series", "Balmer series", "Bracket series", "Pfunds series"], correctAnswer: "Balmer series" },
+            { id: "P51", text: "Which one of the following groups has quantities that do not have the same dimensions", options: ["Velocity, speed", "Pressure, stress", "Force, impulse", "Work, energy"], correctAnswer: "Force, impulse" },
+            { id: "P52", text: "The vector product of two vectors is zero, when", options: ["They are parallel to each other", "They are equal vectors", "They are perpendicular to each other", "They are inclined at angle of 600"], correctAnswer: "They are parallel to each other" },
+            { id: "P53", text: "In right hand rule, the direction of the product vector will be", options: ["Along the thumb erect", "Perpendicular to the erect thumb", "Along the rotation of fingers", "None"], correctAnswer: "Along the thumb erect" },
+            { id: "P54", text: "Torque acting on a body determines", options: ["Acceleration", "Linear acceleration", "Angular acceleration", "Direction of motion of the body"], correctAnswer: "Angular acceleration" },
+            { id: "P55", text: "If the velocity of a body is uniform the velocity -time graph is a straight line which is", options: ["Parallel to x axis", "Parallel", "At an angle of 450 with the x-axis", "Along the y-axis"], correctAnswer: "Parallel to x axis" },
+            { id: "P56", text: "The time period of a satellite in circular orbit depends on:", options: ["Radius of orbit", "Mass of satellite", "Speed of satellite", "Altitude only"], correctAnswer: "Radius of orbit" },
+            { id: "P57", text: "The kinetic energy of a 2 kg object moving at 3 m/s is:", options: ["9 J", "18 J", "6 J", "12 J"], correctAnswer: "9 J" },
+            { id: "P58", text: "The tension in a string in circular motion provides:", options: ["Centripetal force", "Tangential force", "Gravitational force", "Frictional force"], correctAnswer: "Centripetal force" },
+            { id: "P59", text: "The continuity equation in fluid dynamics is based on:", options: ["Conservation of mass", "Conservation of energy", "Conservation of momentum", "Conservation of charge"], correctAnswer: "Conservation of mass" },
+            { id: "P60", text: "The amplitude of an oscillator decreases due to:", options: ["Damping", "Resonance", "Frequency", "Phase"], correctAnswer: "Damping" }
+        ],
+        english: [
+            { id: "E161", text: "Passage: The forest was alive with the sounds of birds and rustling leaves. What is the main idea?", options: ["The forest is noisy", "Birds are singing", "Leaves are falling", "The forest is empty"], correctAnswer: "The forest is noisy" },
+            { id: "E162", text: "Big is to small as long is to:", options: ["Short", "Tall", "Wide", "Deep"], correctAnswer: "Short" },
+            { id: "E163", text: "A synonym for “brave” is:", options: ["Courageous", "Afraid", "Weak", "Tired"], correctAnswer: "Courageous" },
+            { id: "E164", text: "An antonym for “happy” is:", options: ["Sad", "Joyful", "Excited", "Content"], correctAnswer: "Sad" },
+            { id: "E165", text: "Correct the sentence: They is going to the park.", options: ["They are going to the park.", "They was going to the park.", "They going to the park.", "They goes to the park."], correctAnswer: "They are going to the park." },
+            { id: "E166", text: "Correct the spelling: Occured", options: ["Occurred", "Occured", "Ocurred", "Occurred"], correctAnswer: "Occurred" },
+            { id: "E167", text: "Passage: Reading improves vocabulary and critical thinking. What is the main idea?", options: ["Reading is beneficial", "Vocabulary is important", "Thinking is difficult", "Reading is boring"], correctAnswer: "Reading is beneficial" },
+            { id: "E168", text: "Fast is to slow as bright is to:", options: ["Dim", "Light", "Shiny", "Glow"], correctAnswer: "Dim" },
+            { id: "E169", text: "A synonym for “difficult” is:", options: ["Hard", "Easy", "Simple", "Soft"], correctAnswer: "Hard" },
+            { id: "E170", text: "An antonym for “strong” is:", options: ["Weak", "Powerful", "Sturdy", "Firm"], correctAnswer: "Weak" },
+            { id: "E171", text: "Passage: The river flows gently through the village, providing water for crops. What is the main idea?", options: ["The river supports agriculture", "The village is small", "The river is fast", "Crops are expensive"], correctAnswer: "The river supports agriculture" },
+            { id: "E172", text: "Teacher is to student as chef is to:", options: ["Cook", "Kitchen", "Food", "Recipe"], correctAnswer: "Cook" },
+            { id: "E173", text: "A synonym for “calm” is:", options: ["Peaceful", "Angry", "Noisy", "Excited"], correctAnswer: "Peaceful" },
+            { id: "E174", text: "An antonym for “old” is:", options: ["Young", "Ancient", "Aged", "Mature"], correctAnswer: "Young" },
+            { id: "E175", text: "Correct the sentence: He don’t like to swim.", options: ["He doesn’t like to swim.", "He don’t likes to swim.", "He not like to swim.", "He doesn’t likes to swim."], correctAnswer: "He doesn’t like to swim." },
+            { id: "E176", text: "Correct the spelling: Seperate", options: ["Separate", "Seperate", "Sepparate", "Seperete"], correctAnswer: "Separate" },
+            { id: "E177", text: "Passage: Stars twinkle in the night sky, creating a beautiful scene. What is the main idea?", options: ["The night sky is beautiful", "Stars are bright", "The sky is dark", "Stars are far away"], correctAnswer: "The night sky is beautiful" },
+            { id: "E178", text: "Pen is to write as brush is to:", options: ["Paint", "Draw", "Clean", "Sweep"], correctAnswer: "Paint" },
+            { id: "E179", text: "A synonym for “big” is:", options: ["Large", "Small", "Tiny", "Little"], correctAnswer: "Large" },
+            { id: "E180", text: "An antonym for “hot” is:", options: ["Cold", "Warm", "Boiling", "Heated"], correctAnswer: "Cold" },
+            { id: "E181", text: "Correct the sentence: She go to school every day.", options: ["She goes to school every day.", "She going to school every day.", "She go to school everyday.", "She goes to school everyday."], correctAnswer: "She goes to school every day." },
+            { id: "E182", text: "Correct the spelling: Acomodation", options: ["Accommodation", "Acommodation", "Accomodation", "Accommodate"], correctAnswer: "Accommodation" },
+            { id: "E183", text: "Passage: Exercise keeps the body healthy and strong. What is the main idea?", options: ["Exercise is good for health", "The body is strong", "Health is important", "Exercise is tiring"], correctAnswer: "Exercise is good for health" },
+            { id: "E184", text: "Lock is to key as door is to:", options: ["Handle", "Window", "Wall", "Floor"], correctAnswer: "Handle" },
+            { id: "E185", text: "A synonym for “fast” is:", options: ["Quick", "Slow", "Steady", "Calm"], correctAnswer: "Quick" },
+            { id: "E186", text: "An antonym for “near” is:", options: ["Far", "Close", "Next", "Beside"], correctAnswer: "Far" },
+            { id: "E187", text: "Correct the sentence: I has two cats.", options: ["I have two cats.", "I has two cat.", "I have two cat.", "I having two cats."], correctAnswer: "I have two cats." },
+            { id: "E188", text: "Correct the spelling: Definately", options: ["Definitely", "Definitly", "Definately", "Definitelly"], correctAnswer: "Definitely" },
+            { id: "E189", text: "Passage: Music can uplift moods and inspire creativity. What is the main idea?", options: ["Music is inspiring", "Moods are changeable", "Creativity is important", "Music is loud"], correctAnswer: "Music is inspiring" },
+            { id: "E190", text: "Foot is to shoe as hand is to:", options: ["Glove", "Ring", "Bracelet", "Watch"], correctAnswer: "Glove" },
+            { id: "E191", text: "A synonym for “glad” is:", options: ["Happy", "Sad", "Angry", "Tired"], correctAnswer: "Happy" },
+            { id: "E192", text: "An antonym for “light” is:", options: ["Dark", "Bright", "Shiny", "Clear"], correctAnswer: "Dark" },
+            { id: "E193", text: "Correct the sentence: We was playing in the park.", options: ["We were playing in the park.", "We was played in the park.", "We were play in the park.", "We was playing at the park."], correctAnswer: "We were playing in the park." },
+            { id: "E194", text: "Correct the spelling: Tommorrow", options: ["Tomorrow", "Tommorow", "Tommorrow", "Tomorow"], correctAnswer: "Tomorrow" },
+            { id: "E195", text: "Passage: Trees provide shade and oxygen for the environment. What is the main idea?", options: ["Trees are beneficial", "Shade is important", "Oxygen is needed", "Trees are tall"], correctAnswer: "Trees are beneficial" },
+            { id: "E196", text: "Car is to road as boat is to:", options: ["Water", "Dock", "Shore", "Sail"], correctAnswer: "Water" },
+            { id: "E197", text: "A synonym for “small” is:", options: ["Tiny", "Big", "Large", "Huge"], correctAnswer: "Tiny" },
+            { id: "E198", text: "An antonym for “begin” is:", options: ["End", "Start", "Open", "Initiate"], correctAnswer: "End" },
+            { id: "E199", text: "Correct the sentence: The dog run fast.", options: ["The dog runs fast.", "The dog run faster.", "The dog running fast.", "The dog runs faster."], correctAnswer: "The dog runs fast." },
+            { id: "E200", text: "Correct the spelling: Neccessary", options: ["Necessary", "Neccessary", "Necesary", "Necassary"], correctAnswer: "Necessary" }
+        ]
+    };
+
+    // Function to shuffle an array (Fisher-Yates algorithm)
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+      }
+      return array;
+    }
+
+    function initializeQuestions() {
+        // Create a deep copy of rawQuestions to avoid modifying the original data
+        const shuffledQuestions = {
+            mathematics: shuffleArray([...rawQuestions.mathematics]),
+            physics: shuffleArray([...rawQuestions.physics]),
+            english: shuffleArray([...rawQuestions.english])
+        };
+        questionsData = shuffledQuestions;
+    }
+    
+    function updateTimerDisplay() {
+        const hours = Math.floor(timeLeft / 3600);
+        const minutes = Math.floor((timeLeft % 3600) / 60);
+        const seconds = timeLeft % 60;
+        timerDisplay.textContent = 
+            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerDisplay();
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                submitTest(true);
+            }
+        }, 1000);
+    }
+
+    function displayQuestion() {
+        const subjectQuestions = questionsData[currentSubject];
+        const qIndex = currentQuestionIndices[currentSubject];
+        const question = subjectQuestions[qIndex];
+
+        questionHeader.textContent = `${currentSubject.charAt(0).toUpperCase() + currentSubject.slice(1)}: Question ${qIndex + 1} of ${subjectQuestions.length}`;
+        questionText.textContent = question.text;
+
+        optionsContainer.innerHTML = '';
+        question.options.forEach((option, index) => {
+            const optionId = `q${question.id}_opt${index}`;
+            const li = document.createElement('li');
+            const label = document.createElement('label');
+            label.htmlFor = optionId;
+            label.className = 'option-label';
+            
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.id = optionId;
+            radio.name = `q_${question.id}`;
+            radio.value = option;
+            radio.className = 'mr-2';
+
+            if (userSelections[question.id] === option) {
+                radio.checked = true;
+                label.classList.add('selected');
+            }
+            
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(option));
+            
+            label.addEventListener('click', (e) => {
+                document.querySelectorAll(`#optionsContainer .option-label`).forEach(l => l.classList.remove('selected'));
+                label.classList.add('selected');
+                userSelections[question.id] = option;
+                radio.checked = true;
+                updateAnsweredCounts();
+                updateNavigatorButtonStatus(question.id, true);
+            });
+            li.appendChild(label);
+            optionsContainer.appendChild(li);
+        });
+
+        prevBtn.disabled = qIndex === 0;
+        nextBtn.disabled = qIndex === subjectQuestions.length - 1;
+        
+        if (markedForReview[question.id]) {
+            markReviewBtn.textContent = 'Unmark Review';
+            markReviewBtn.classList.add('bg-yellow-200', 'text-yellow-700');
+            markReviewBtn.classList.remove('bg-yellow-400', 'text-yellow-800');
+        } else {
+            markReviewBtn.textContent = 'Mark for Review';
+            markReviewBtn.classList.remove('bg-yellow-200', 'text-yellow-700');
+            markReviewBtn.classList.add('bg-yellow-400', 'text-yellow-800');
+        }
+        updateActiveNavigatorButton();
+    }
+
+    function updateAnsweredCounts() {
+        mathAnsweredCountEl.textContent = Object.keys(userSelections).filter(id => id.startsWith('M')).length;
+        physicsAnsweredCountEl.textContent = Object.keys(userSelections).filter(id => id.startsWith('P')).length;
+        englishAnsweredCountEl.textContent = Object.keys(userSelections).filter(id => id.startsWith('E')).length;
+    }
+
+    function changeSubject(subject) {
+        if (testActive && currentSubject !== subject) {
+            const timeElapsed = Date.now() - lastSubjectChangeTime;
+            subjectTimeSpent[currentSubject] += timeElapsed;
+            lastSubjectChangeTime = Date.now();
+        }
+        currentSubject = subject;
+        subjectNavBtns.forEach(btn => {
+            btn.classList.remove('nav-button-active');
+            btn.classList.add('nav-button-inactive');
+            if (btn.dataset.subject === subject) {
+                btn.classList.add('nav-button-active');
+                btn.classList.remove('nav-button-inactive');
+            }
+        });
+        
+        populateQuestionNavigator();
+        displayQuestion();
+    }
+
+    function populateQuestionNavigator() {
+        questionNavigator.innerHTML = '';
+        const subjectQuestions = questionsData[currentSubject];
+        subjectQuestions.forEach((q, index) => {
+            const btn = document.createElement('button');
+            btn.textContent = index + 1;
+            btn.className = 'p-1 border rounded text-xs hover:bg-slate-200 transition-colors';
+            if (userSelections[q.id]) {
+                btn.classList.add('bg-sky-200');
+            } else {
+                btn.classList.add('bg-white');
+            }
+            if (markedForReview[q.id]) {
+                btn.classList.add('marked-for-review');
+            }
+            btn.addEventListener('click', () => {
+                currentQuestionIndices[currentSubject] = index;
+                displayQuestion();
+            });
+            questionNavigator.appendChild(btn);
+        });
+        updateActiveNavigatorButton();
+    }
+    
+    function updateActiveNavigatorButton() {
+        const qIndex = currentQuestionIndices[currentSubject];
+        const navigatorButtons = questionNavigator.children;
+        Array.from(navigatorButtons).forEach((btn, idx) => {
+            btn.classList.remove('ring-2', 'ring-sky-500', 'font-bold');
+            if (idx === qIndex) {
+                btn.classList.add('ring-2', 'ring-sky-500', 'font-bold');
+            }
+        });
+    }
+
+    function updateNavigatorButtonStatus(questionId, answered) {
+        const subjectQuestions = questionsData[currentSubject];
+        const qIndex = subjectQuestions.findIndex(q => q.id === questionId);
+        if (qIndex !== -1 && questionNavigator.children[qIndex]) {
+            const navBtn = questionNavigator.children[qIndex];
+            if (answered) {
+                navBtn.classList.add('bg-sky-200');
+                navBtn.classList.remove('bg-white');
+            }
+        }
+    }
+
+
+    function startTest() {
+        timeLeft = 3 * 60 * 60;
+        userSelections = {};
+        markedForReview = {};
+        currentQuestionIndices = { mathematics: 0, physics: 0, english: 0 };
+        subjectTimeSpent = { mathematics: 0, physics: 0, english: 0 }; // Reset time spent
+        currentSubject = 'mathematics';
+        testActive = true;
+
+        initializeQuestions(); // Shuffle questions here
+
+        welcomeScreen.classList.add('hidden');
+        analysisScreen.classList.add('hidden');
+        testScreen.classList.remove('hidden');
+
+        startTimer();
+        changeSubject('mathematics');
+        subjectStartTime[currentSubject] = Date.now(); // Record start time for first subject
+        lastSubjectChangeTime = Date.now();
+        updateAnsweredCounts();
+    }
+
+    function submitTest(autoSubmitted = false) {
+        if (!autoSubmitted) {
+            const unsavedChanges = confirm("Are you sure you want to submit the test? This action cannot be undone.");
+            if (!unsavedChanges) return;
+        }
+        
+        if (testActive) {
+            const timeElapsed = Date.now() - lastSubjectChangeTime;
+            subjectTimeSpent[currentSubject] += timeElapsed;
+        }
+
+        testActive = false;
+        clearInterval(timerInterval);
+        calculateResults();
+        testScreen.classList.add('hidden');
+        analysisScreen.classList.remove('hidden');
+    }
+
+    function calculateResults() {
+        let totalCorrect = 0;
+        let subjectScores = {
+            mathematics: { correct: 0, total: questionsData.mathematics.length, attempted: 0 },
+            physics: { correct: 0, total: questionsData.physics.length, attempted: 0 },
+            english: { correct: 0, total: questionsData.english.length, attempted: 0 }
+        };
+
+        for (const subject in questionsData) {
+            questionsData[subject].forEach(q => {
+                if (userSelections[q.id]) {
+                    subjectScores[subject].attempted++;
+                    if (userSelections[q.id] === q.correctAnswer) {
+                        subjectScores[subject].correct++;
+                        totalCorrect++;
+                    }
+                }
+            });
+        }
+        displayAnalysis(totalCorrect, subjectScores);
+    }
+
+    function displayAnalysis(totalCorrect, subjectScores) {
+        document.getElementById('overallScoreText').textContent = `${totalCorrect} / 200`;
+
+        const summaryDiv = document.getElementById('scoreSummary');
+        summaryDiv.innerHTML = `
+            <p><strong>Overall:</strong> ${totalCorrect} correct out of 200 questions (${((totalCorrect / 200) * 100).toFixed(1)}%)</p>
+            <p><strong>Mathematics:</strong> ${subjectScores.mathematics.correct} / ${subjectScores.mathematics.total} (${((subjectScores.mathematics.correct / subjectScores.mathematics.total) * 100).toFixed(1)}% accuracy) - Attempted: ${subjectScores.mathematics.attempted}</p>
+            <p><strong>Physics:</strong> ${subjectScores.physics.correct} / ${subjectScores.physics.total} (${((subjectScores.physics.correct / subjectScores.physics.total) * 100).toFixed(1)}% accuracy) - Attempted: ${subjectScores.physics.attempted}</p>
+            <p><strong>English:</strong> ${subjectScores.english.correct} / ${subjectScores.english.total} (${((subjectScores.english.correct / subjectScores.english.total) * 100).toFixed(1)}% accuracy) - Attempted: ${subjectScores.english.attempted}</p>
+            <h4 class="text-lg font-semibold mt-4 mb-2 text-sky-700">Time Management Analysis</h4>
+            ${Object.keys(subjectTimeSpent).map(subject => {
+                const timeInMinutes = (subjectTimeSpent[subject] / (1000 * 60)).toFixed(1);
+                const rec = recommendedTime[subject];
+                let feedback = '';
+                if (timeInMinutes < rec.min) {
+                    feedback = `(You were very fast! Consider reviewing for accuracy, but good pace.)`;
+                } else if (timeInMinutes > rec.max) {
+                    feedback = `(You spent more time than recommended. Focus on speeding up in this section.)`;
+                } else {
+                    feedback = `(Good time management for this section.)`;
+                }
+                return `<p><strong>${subject.charAt(0).toUpperCase() + subject.slice(1)}:</strong> ${timeInMinutes} minutes spent (Recommended: ${rec.min}-${rec.max} minutes) ${feedback}</p>`;
+            }).join('')}
+            <h4 class="text-lg font-semibold mt-4 mb-2 text-sky-700">Weakness Identification & Conceptual Feedback</h4>
+            <p class="text-sm text-slate-700">Review the "Detailed Question Review" below. For each incorrect answer, reflect on whether the mistake was due to a conceptual misunderstanding, a calculation error, or simply time pressure. This self-analysis is key to targeted improvement.</p>
+        `;
+        
+        renderCharts(totalCorrect, subjectScores);
+        renderDetailedReview(subjectScores);
+    }
+
+    function renderCharts(totalCorrect, subjectScores) {
+        const totalAttempted = subjectScores.mathematics.attempted + subjectScores.physics.attempted + subjectScores.english.attempted;
+        const totalUnattempted = 200 - totalAttempted;
+        const totalIncorrect = totalAttempted - totalCorrect;
+
+        const overallCtx = document.getElementById('overallScoreChart').getContext('2d');
+        if(overallScoreChartInstance) overallScoreChartInstance.destroy();
+        overallScoreChartInstance = new Chart(overallCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Correct', 'Incorrect', 'Unattempted'],
+                datasets: [{
+                    data: [totalCorrect, totalIncorrect, totalUnattempted],
+                    backgroundColor: ['#10b981', '#ef4444', '#9ca3af'],
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        const sectionalCtx = document.getElementById('sectionalScoreChart').getContext('2d');
+        if(sectionalScoreChartInstance) sectionalScoreChartInstance.destroy();
+        sectionalScoreChartInstance = new Chart(sectionalCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Mathematics', 'Physics', 'English'],
+                datasets: [{
+                    label: 'Accuracy (%)',
+                    data: [
+                        (subjectScores.mathematics.correct / subjectScores.mathematics.total) * 100,
+                        (subjectScores.physics.correct / subjectScores.physics.total) * 100,
+                        (subjectScores.english.correct / subjectScores.english.total) * 100
+                    ],
+                    backgroundColor: ['#3b82f6', '#14b8a6', '#f59e0b'],
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: 'Accuracy (%)' } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    function renderDetailedReview() {
+        const reviewContent = document.getElementById('detailedReviewContent');
+        reviewContent.innerHTML = ''; 
+
+        ['mathematics', 'physics', 'english'].forEach(subject => {
+            const subjectTitle = document.createElement('h4');
+            subjectTitle.className = 'text-lg font-semibold mt-4 mb-2 text-sky-600';
+            subjectTitle.textContent = subject.charAt(0).toUpperCase() + subject.slice(1);
+            reviewContent.appendChild(subjectTitle);
+
+            questionsData[subject].forEach((q, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'p-3 border border-slate-200 rounded-md mb-3';
+                
+                const qTextP = document.createElement('p');
+                qTextP.className = 'font-medium mb-1';
+                qTextP.innerHTML = `<strong>Q${index + 1}:</strong> ${q.text}`;
+                questionDiv.appendChild(qTextP);
+
+                const optionsUl = document.createElement('ul');
+                optionsUl.className = 'list-none pl-0 space-y-1 text-sm';
+                q.options.forEach(opt => {
+                    const optLi = document.createElement('li');
+                    optLi.textContent = opt;
+                    optLi.className = 'p-1.5 border rounded-md';
+
+                    if (opt === q.correctAnswer) {
+                        optLi.classList.add('correct-answer');
+                    }
+                    if (userSelections[q.id] === opt) {
+                        if (opt !== q.correctAnswer) {
+                            optLi.classList.add('user-selected-wrong');
+                        }
+                    } else if (!userSelections[q.id] && opt === q.correctAnswer) {
+                         optLi.classList.add('correct-answer');
+                    }
+
+
+                    optionsUl.appendChild(optLi);
+                });
+                questionDiv.appendChild(optionsUl);
+
+                if (userSelections[q.id]) {
+                    const userAnswerP = document.createElement('p');
+                    userAnswerP.className = 'text-xs mt-1';
+                    userAnswerP.innerHTML = `Your answer: <span class="${userSelections[q.id] === q.correctAnswer ? 'text-emerald-600 font-semibold' : 'text-red-600 font-semibold'}">${userSelections[q.id]}</span>`;
+                    questionDiv.appendChild(userAnswerP);
+                } else {
+                     const unattemptedP = document.createElement('p');
+                    unattemptedP.className = 'text-xs mt-1 text-slate-500 font-semibold';
+                    unattemptedP.textContent = 'Unattempted';
+                    questionDiv.appendChild(unattemptedP);
+                }
+                 if (userSelections[q.id] !== q.correctAnswer) {
+                    const correctAnswerP = document.createElement('p');
+                    correctAnswerP.className = 'text-xs mt-1 text-emerald-700 font-semibold';
+                    correctAnswerP.textContent = `Correct answer: ${q.correctAnswer}`;
+                    questionDiv.appendChild(correctAnswerP);
+                }
+
+
+                reviewContent.appendChild(questionDiv);
+            });
+        });
+    }
+
+
+    // Event Listeners
+    startTestBtn.addEventListener('click', startTest);
+    retakeTestBtn.addEventListener('click', startTest);
+
+    nextBtn.addEventListener('click', () => {
+        if (currentQuestionIndices[currentSubject] < questionsData[currentSubject].length - 1) {
+            currentQuestionIndices[currentSubject]++;
+            displayQuestion();
+        }
+    });
+
+    prevBtn.addEventListener('click', () => {
+        if (currentQuestionIndices[currentSubject] > 0) {
+            currentQuestionIndices[currentSubject]--;
+            displayQuestion();
+        }
+    });
+
+    markReviewBtn.addEventListener('click', () => {
+        const questionId = questionsData[currentSubject][currentQuestionIndices[currentSubject]].id;
+        markedForReview[questionId] = !markedForReview[questionId];
+        
+        const navBtn = questionNavigator.children[currentQuestionIndices[currentSubject]];
+        if (markedForReview[questionId]) {
+            navBtn.classList.add('marked-for-review');
+        } else {
+            navBtn.classList.remove('marked-for-review');
+        }
+        displayQuestion();
+    });
+
+    submitTestBtn.addEventListener('click', () => submitTest(false));
+
+    subjectNavBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            changeSubject(btn.dataset.subject);
+        });
+    });
+    
+    // Initial setup
+    updateTimerDisplay();
+    initializeQuestions();
+
+</script>
+</body>
+</html>
